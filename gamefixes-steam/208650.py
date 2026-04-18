@@ -29,7 +29,11 @@ def main() -> None:
         util.set_environment('ZLUDA_VALIDATE_SORT_SAFE', '1')
         util.set_environment('ZLUDA_TRACE_SORT_COPY', '1')
         util.set_environment('ZLUDA_MS4_CAPTURE', '1')
+        util.set_environment('ZLUDA_COUNTER_SNAPSHOT', '1')
         util.set_environment('ZLUDA_SORT_ZERO_INPUT_SLACK', '1')
+        # Investigation gate: strict NULL-stream semantics removed the older
+        # n=8827 sort failure and exposed a later n=4688 CreateGrid family.
+        util.set_environment('ZLUDA_NULL_STREAM_STRICT', '1')
         util.set_environment('PROTON_LOG', '0')
         util.set_environment('DXVK_LOG_LEVEL', 'warn')
         util.set_environment('WINEDEBUG', '-all')
