@@ -1,11 +1,16 @@
 import unittest
 import os
 import tempfile
+import importlib.util
+import shutil
+import sys
+import types
 from pathlib import Path
 from unittest.mock import patch, mock_open
 import io
 import urllib.request
 import fix
+import util as protonfix_util
 
 
 class TestProtonfixes(unittest.TestCase):
@@ -373,6 +378,78 @@ class TestProtonfixes(unittest.TestCase):
         func = fix.get_game_name.__wrapped__  # Do not reference the cache
         result = func()
         self.assertEqual(result, 'UNKNOWN')
+
+
+class TestBatmanInvestigationFix(unittest.TestCase):
+    def _load_fix(self, path=None):
+        if path is None:
+            path = Path(__file__).with_name('gamefixes-steam').joinpath('208650.py')
+        spec = importlib.util.spec_from_file_location('batman_208650', path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        pkg = types.ModuleType('protonfixes')
+        pkg.util = protonfix_util
+        with patch.dict(
+            sys.modules,
+            {'protonfixes': pkg, 'protonfixes.util': protonfix_util},
+            clear=False,
+        ):
+            spec.loader.exec_module(module)
+        return module
+
+    def test_shell_override_wins_for_capture_env(self):
+        module = self._load_fix()
+        applied = {}
+
+        def record_env(key, value):
+            applied[key] = value
+
+        with patch.dict(
+            os.environ,
+            {'ZLUDA_TFS_CAPTURE': '0', 'ZLUDA_IOFX_CAPTURE': '1', 'ZLUDA_IOFX_BBOX_CAPTURE': '1'},
+            clear=False,
+        ):
+            with patch.object(module.util, 'set_environment', side_effect=record_env):
+                with patch.object(module.util, 'winedll_override'):
+                    module.main()
+
+        self.assertEqual(applied['ZLUDA_TFS_CAPTURE'], '0')
+        self.assertEqual(applied['ZLUDA_IOFX_CAPTURE'], '1')
+        self.assertEqual(applied['ZLUDA_IOFX_BBOX_CAPTURE'], '1')
+        self.assertEqual(applied['ZLUDA_MS4_CAPTURE'], '1')
+        self.assertEqual(applied['ZLUDA_VALIDATE_SORT_SAFE'], '0')
+        self.assertEqual(applied['ZLUDA_TRACE_SORT_COPY'], '0')
+        self.assertEqual(applied['ZLUDA_NULL_STREAM_STRICT'], '1')
+
+    def test_file_override_wins_for_capture_env(self):
+        source = Path(__file__).with_name('gamefixes-steam').joinpath('208650.py')
+        with tempfile.TemporaryDirectory() as tmpdir:
+            copied = Path(tmpdir).joinpath('208650.py')
+            shutil.copy2(source, copied)
+            copied.with_suffix('.env').write_text(
+                'ZLUDA_TFS_CAPTURE=0\n'
+                'ZLUDA_MS4_CAPTURE=0\n'
+                'ZLUDA_IOFX_CAPTURE=1\n'
+                'ZLUDA_IOFX_BBOX_CAPTURE=1\n'
+            )
+            module = self._load_fix(copied)
+            applied = {}
+
+            def record_env(key, value):
+                applied[key] = value
+
+            with patch.dict(os.environ, {'ZLUDA_TFS_CAPTURE': '1'}, clear=False):
+                with patch.object(module.util, 'set_environment', side_effect=record_env):
+                    with patch.object(module.util, 'winedll_override'):
+                        module.main()
+
+        self.assertEqual(applied['ZLUDA_TFS_CAPTURE'], '0')
+        self.assertEqual(applied['ZLUDA_MS4_CAPTURE'], '0')
+        self.assertEqual(applied['ZLUDA_IOFX_CAPTURE'], '1')
+        self.assertEqual(applied['ZLUDA_IOFX_BBOX_CAPTURE'], '1')
+        self.assertEqual(applied['ZLUDA_VALIDATE_SORT_SAFE'], '0')
+        self.assertEqual(applied['ZLUDA_NULL_STREAM_STRICT'], '1')
 
 if __name__ == '__main__':
     unittest.main()
