@@ -68,6 +68,7 @@ def main() -> None:
         set_default_environment('ZLUDA_TFS_CAPTURE', '1')
         set_default_environment('ZLUDA_IOFX_CAPTURE', '0')
         set_default_environment('ZLUDA_IOFX_BBOX_CAPTURE', '0')
+        set_default_environment('ZLUDA_DOWNSWEEP_CAPTURE', '1')
         set_default_environment('ZLUDA_COUNTER_SNAPSHOT', '1')
         set_default_environment('ZLUDA_SORT_ZERO_INPUT_SLACK', '1')
         # Investigation gate: strict NULL-stream semantics removed the older
