@@ -129,6 +129,11 @@ def main() -> None:
         # (full coverage after FORCE_YZ covers v1/v2). Shrink if LLVM crashes.
         set_default_environment('ZLUDA_DS_INLINE_VGPR_ZERO_START', '3')
         set_default_environment('ZLUDA_DS_INLINE_VGPR_ZERO_END', '64')
+        # Concurrent-operations diagnostics (2026-04-24). Logs every kernel launch
+        # and D2D copy with stream info to detect if overlapping operations or 
+        # stream ordering issues cause the Downsweep fault. Default 0; set to 1
+        # via 208650.env to test. Can greatly increase log size (~multi-MB runs).
+        set_default_environment('ZLUDA_LOG_CONCURRENT_OPS', '0')
         # HSA runtime env vars forwarded from host for scratch-policy probes.
         # HSA_NO_SCRATCH_RECLAIM=1 disables scratch-pool reclamation. Tested
         # 2026-04-24: shifts wild-fault offset but doesn't eliminate bug.
