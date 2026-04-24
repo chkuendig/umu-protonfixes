@@ -75,6 +75,10 @@ def main() -> None:
         # the reported Downsweep fault is actually upstream (pre-launch peek
         # returns non-OK) or localized to the Downsweep kernel itself.
         set_default_environment('ZLUDA_DOWNSWEEP_FENCE', '0')
+        # Phase H-step 1: canary memory guard. When '1', allocates 8 × 1MB
+        # device canary regions filled with 0xDEADBEEF at first Downsweep
+        # launch; scans them pre-Downsweep for wild-write detection.
+        set_default_environment('ZLUDA_DOWNSWEEP_CANARY', '0')
         # Phase 5C diagnostic: comma-separated kernel-name substrings to SKIP
         # (launch returns OK without actually dispatching). Used for fault-
         # attribution bisection. Default empty = no skipping.
