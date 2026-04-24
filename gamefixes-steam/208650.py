@@ -69,6 +69,12 @@ def main() -> None:
         set_default_environment('ZLUDA_IOFX_CAPTURE', '0')
         set_default_environment('ZLUDA_IOFX_BBOX_CAPTURE', '0')
         set_default_environment('ZLUDA_DOWNSWEEP_CAPTURE', '1')
+        # Phase H-step 2: fence-around-Downsweep experiment. When set to '1',
+        # wraps every RadixSortDownsweepKernel launch in pre- and post-launch
+        # hipDeviceSynchronize + hipPeekAtLastError so we can decide whether
+        # the reported Downsweep fault is actually upstream (pre-launch peek
+        # returns non-OK) or localized to the Downsweep kernel itself.
+        set_default_environment('ZLUDA_DOWNSWEEP_FENCE', '0')
         # Phase 5C diagnostic: comma-separated kernel-name substrings to SKIP
         # (launch returns OK without actually dispatching). Used for fault-
         # attribution bisection. Default empty = no skipping.
