@@ -92,8 +92,10 @@ def main() -> None:
         # prolog spills garbage residue to scratch → reloaded into a
         # scatter address → wild TCP-write at values_a - <negative>.
         # This patch emits volatile tid.y/z reads so the backend flips
-        # the enable bits. Default 0.
-        set_default_environment('ZLUDA_FORCE_WORKITEM_ID_YZ', '0')
+        # the enable bits. 2026-04-24: enabled as partial fix (eliminates
+        # v1/v2 wild writes, confirmed via instrumentation). Other VGPRs
+        # (v3..v63) still carry residue, but this improves reliability.
+        set_default_environment('ZLUDA_FORCE_WORKITEM_ID_YZ', '1')
         # Downsweep scatter-store instrumentation (2026-04-24). Allocates a
         # pinned host-mapped witness buffer and patches every `st.global.u32
         # [%rdN], %rM;` scatter inside RadixSortDownsweepKernel to write
