@@ -79,6 +79,59 @@ def main() -> None:
         # device canary regions filled with 0xDEADBEEF at first Downsweep
         # launch; scans them pre-Downsweep for wild-write detection.
         set_default_environment('ZLUDA_DOWNSWEEP_CANARY', '0')
+        # LDS-zero prelude (2026-04-24): patches every RadixSortDownsweepKernel
+        # PTX at load time to emit a cooperative LDS-zero loop + bar.sync at
+        # kernel entry. Tests whether residue-driven uninit-LDS reads produce
+        # the observed TCP-write fault at values_a - <varying negative offset>.
+        # Default 0; flip to 1 via 208650.env or host shell.
+        set_default_environment('ZLUDA_DOWNSWEEP_LDS_ZERO', '0')
+        # Force HW initialization of v1/v2 (workitem_id_y/z) VGPRs at
+        # Downsweep kernel entry. Block=(128,1,1) means y=z=0 always, but
+        # the compiler DCE's the tid.y/z reads → kernel descriptor's
+        # enable_vgpr_workitem_id=0 → HW does NOT zero v1,v2 → Downsweep
+        # prolog spills garbage residue to scratch → reloaded into a
+        # scatter address → wild TCP-write at values_a - <negative>.
+        # This patch emits volatile tid.y/z reads so the backend flips
+        # the enable bits. Default 0.
+        set_default_environment('ZLUDA_FORCE_WORKITEM_ID_YZ', '0')
+        # Downsweep scatter-store instrumentation (2026-04-24). Allocates a
+        # pinned host-mapped witness buffer and patches every `st.global.u32
+        # [%rdN], %rM;` scatter inside RadixSortDownsweepKernel to write
+        # (addr_lo, addr_hi, data, slot_idx) to its per-lane slot BEFORE the
+        # original store. On SIGABRT the buffer survives (pinned host mem);
+        # inspect via ZLUDA's crash dump or DtoH on the host side. Default 0.
+        set_default_environment('ZLUDA_DOWNSWEEP_INSTRUMENT', '0')
+        # Instrumentation window: skip the first N matching stores, then cap
+        # the next M. Default M=128, N=0 covers sites [0,128). To window the
+        # LATER stores, export SKIP=80 MAX_SITES=128 → sites [80, 208).
+        set_default_environment('ZLUDA_DOWNSWEEP_INSTRUMENT_MAX_SITES', '128')
+        set_default_environment('ZLUDA_DOWNSWEEP_INSTRUMENT_SKIP', '0')
+        # Diagnostic: force wave64 at codegen. Sets target-feature
+        # -wavefrontsize32,+wavefrontsize64 on each kernel. Causes LLVM
+        # SelectionDAG abort on Downsweep as of 2026-04-24, so currently
+        # useful only for probing simpler kernels. Default 0.
+        set_default_environment('ZLUDA_WAVE64', '0')
+        # Number of extra VGPRs to force-zero at Downsweep kernel entry via
+        # the yz-vgpr-init patch. The patch allocates N u32 PTX registers,
+        # inits them to 0, OR-chains them into an accumulator, and volatile-
+        # stores the accumulator. Force_yz ALSO needs to be enabled for this
+        # patch to run. Probe values 16/32/64. Default 0 = off.
+        set_default_environment('ZLUDA_FORCE_VGPR_ZERO_COUNT', '0')
+        # LLVM-IR-level injection of AMDGPU inline asm `v_mov_b32 vN, 0`
+        # for v3..v63 at each Downsweep kernel's entry. Clobber list forces
+        # LLVM to treat those VGPRs as written. Together with the PTX-level
+        # force-yz patch (which covers v1/v2), this should zero-init the
+        # full VGPR set before the spill prolog. Default 0.
+        set_default_environment('ZLUDA_DS_INLINE_VGPR_ZERO', '0')
+        # Range [START, END) of VGPRs to zero via inline asm. Default v3..v64
+        # (full coverage after FORCE_YZ covers v1/v2). Shrink if LLVM crashes.
+        set_default_environment('ZLUDA_DS_INLINE_VGPR_ZERO_START', '3')
+        set_default_environment('ZLUDA_DS_INLINE_VGPR_ZERO_END', '64')
+        # HSA runtime env vars forwarded from host for scratch-policy probes.
+        # HSA_NO_SCRATCH_RECLAIM=1 disables scratch-pool reclamation. Tested
+        # 2026-04-24: shifts wild-fault offset but doesn't eliminate bug.
+        set_default_environment('HSA_NO_SCRATCH_RECLAIM', '0')
+        set_default_environment('HSA_ENABLE_SCRATCH_ONCE', '0')
         # Phase 5C diagnostic: comma-separated kernel-name substrings to SKIP
         # (launch returns OK without actually dispatching). Used for fault-
         # attribution bisection. Default empty = no skipping.
