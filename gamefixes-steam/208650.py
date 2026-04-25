@@ -102,6 +102,12 @@ def main() -> None:
         # (a separate, known issue per
         # project_creategrid_dtod_overwrite.md).
         set_default_environment('ZLUDA_DOWNSWEEP_SCAN_CLAMP', '1')
+        # 2026-04-25 evening: ANDs out bit-31 on every keys_out scatter
+        # write inside RadixSortDownsweepKernel. Default OFF until in-game
+        # validation lands. Targets the post-SCAN-clamp CreateGrid crash —
+        # see project_phase12_pr145902_live_2026_04_25.md and
+        # project_creategrid_post_scan_clamp_2026_04_25.md.
+        set_default_environment('ZLUDA_DOWNSWEEP_CLEAR_BIT31', '0')
         # Phase H-step 2: fence-around-Downsweep experiment. When set to '1',
         # wraps every RadixSortDownsweepKernel launch in pre- and post-launch
         # hipDeviceSynchronize + hipPeekAtLastError so we can decide whether
