@@ -88,6 +88,20 @@ def main() -> None:
         # possible. Sort output is INCORRECT under this mask — diagnostic
         # only, do not ship enabled.
         set_default_environment('ZLUDA_DOWNSWEEP_RANK_MASK', '0')
+        # SCAN-output clamp: insert `max.s32 %rDst, %rDst, 0;` between
+        # every `sub.s32 %rDst, _, _;` → `st.shared.u32 [_], %rDst;`
+        # sequence in CUB Downsweep. Targets the BlockScan exclusive-
+        # prefix-sum subtract that can underflow on AMDGPU and produce
+        # negative i32 LDS slots that then become wild scatter ranks.
+        # Histogram counts are non-negative so a non-negative prefix is
+        # always correct.
+        #
+        # **VERIFIED FIX (2026-04-25)**: 3 runs with this patch + sort_guard
+        # show guard[0] dirty_words=0 (down from 7832 baseline). Sort
+        # completes 10 passes per frame; crash now lands at CreateGrid
+        # (a separate, known issue per
+        # project_creategrid_dtod_overwrite.md).
+        set_default_environment('ZLUDA_DOWNSWEEP_SCAN_CLAMP', '1')
         # Phase H-step 2: fence-around-Downsweep experiment. When set to '1',
         # wraps every RadixSortDownsweepKernel launch in pre- and post-launch
         # hipDeviceSynchronize + hipPeekAtLastError so we can decide whether
