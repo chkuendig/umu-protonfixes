@@ -69,6 +69,25 @@ def main() -> None:
         set_default_environment('ZLUDA_IOFX_CAPTURE', '0')
         set_default_environment('ZLUDA_IOFX_BBOX_CAPTURE', '0')
         set_default_environment('ZLUDA_DOWNSWEEP_CAPTURE', '1')
+        # Sort-guard probe: when '1', over-allocates 520000-byte allocations
+        # (CUB sort temps) with a 512 KB DEADBEEF-filled pre-pad. The SIGABRT
+        # handler scans the pad post-mortem — any non-DEADBEEF byte is a
+        # wild store from Downsweep into what would otherwise be unmapped
+        # memory. Identifies where the wild pointer comes from without
+        # modifying any kernel.
+        set_default_environment('ZLUDA_SORT_GUARD', '0')
+        # WAR-barrier patch for CUB Downsweep digit-offset LDS read.
+        # Inserts `bar.sync 0;` before the `mul.wide.u32 _, _, 4 ;
+        # add.s64 _, %rd<lds_base>, _ ; ld.shared.u32 _, [_]` triplet to
+        # close the LDS WAR hazard between phases that share temp_storage.
+        set_default_environment('ZLUDA_DOWNSWEEP_WAR_BARRIER', '0')
+        # Rank-mask DIAGNOSTIC: clamp the scatter-rank register to 14 bits
+        # right after `add.s32` and before `cvt.s64.s32 / mul.wide.s32`.
+        # If sort_guard's wild writes go away with this on, the high bits
+        # of the rank are residue/garbage and a more targeted fix is
+        # possible. Sort output is INCORRECT under this mask — diagnostic
+        # only, do not ship enabled.
+        set_default_environment('ZLUDA_DOWNSWEEP_RANK_MASK', '0')
         # Phase H-step 2: fence-around-Downsweep experiment. When set to '1',
         # wraps every RadixSortDownsweepKernel launch in pre- and post-launch
         # hipDeviceSynchronize + hipPeekAtLastError so we can decide whether
