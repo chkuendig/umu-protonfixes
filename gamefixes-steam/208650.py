@@ -108,11 +108,10 @@ def main() -> None:
         # see project_phase12_pr145902_live_2026_04_25.md and
         # project_creategrid_post_scan_clamp_2026_04_25.md.
         set_default_environment('ZLUDA_DOWNSWEEP_CLEAR_BIT31', '0')
-        # 2026-04-26: bar.sync 0 before each BlockScan standalone shfl.up.b32
-        # in Downsweep — fixes the cross-wave sync that AMDGPU's lowering of
-        # shfl.sync to ds_bpermute_b32 fails to emit. This is a true
-        # value-correctness fix (not a workaround), so default ON.
-        set_default_environment('ZLUDA_DOWNSWEEP_BLOCKSCAN_PRESYNC', '1')
+        # 2026-04-26: ZLUDA_DOWNSWEEP_BLOCKSCAN_PRESYNC retired —
+        # superseded by the explicit s_waitcnt(0) added to the bar_sync
+        # wrapper in zluda_ptx_impl.cpp (commit 579bcc05), which covers
+        # every bar.sync in every kernel.
         # Phase H-step 2: fence-around-Downsweep experiment. When set to '1',
         # wraps every RadixSortDownsweepKernel launch in pre- and post-launch
         # hipDeviceSynchronize + hipPeekAtLastError so we can decide whether
