@@ -69,6 +69,12 @@ def main() -> None:
         set_default_environment('ZLUDA_IOFX_CAPTURE', '0')
         set_default_environment('ZLUDA_IOFX_BBOX_CAPTURE', '0')
         set_default_environment('ZLUDA_DOWNSWEEP_CAPTURE', '1')
+        # 2026-04-26 NIGHT: pair Scan capture with Downsweep capture so we
+        # have post-Upsweep (= pre-Scan) AND post-Scan (= pre-Downsweep)
+        # snapshots of d_spine. Lets us pinpoint whether wrong d_spine
+        # comes from Upsweep or from Scan. Output: /tmp/cub_scan_captures.bin
+        # See project_real_root_cause_is_scankernel_2026_04_26.md.
+        set_default_environment('ZLUDA_SCAN_CAPTURE', '1')
         # Sort-guard probe: when '1', over-allocates 520000-byte allocations
         # (CUB sort temps) with a 512 KB DEADBEEF-filled pre-pad. The SIGABRT
         # handler scans the pad post-mortem — any non-DEADBEEF byte is a
