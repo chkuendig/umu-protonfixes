@@ -175,6 +175,18 @@ def main() -> None:
         # "warp scan failed" (r94=0) and "bar.sync failed to publish"
         # (r94=8109 but r9=0). See project_morning_briefing_2026_04_27.md.
         set_default_environment('ZLUDA_SCAN_INSTRUMENT', '1')
+        # 2026-04-27: drop `+precise-memory` from the AMDGPU codegen
+        # target-features for this game. Per ROCgdb docs, that flag is
+        # a debugger fault-precision knob (drains memcnt after every
+        # memory op for accurate fault PCs), NOT a scheduler-reorder
+        # barrier as our prior comment claimed. The cited LLVM #131386
+        # and Codeplay GROMACS posts are register-allocator bugs,
+        # unrelated. Cost: ~5-10% perf, ~5 KB of extra s_waitcnt asm
+        # per Scan kernel. Validated A/B (5+5 runs): 5/5 reach Scan
+        # with =0 vs 4/5 with =1; same crash families; median 253k vs
+        # 259k kernels (within run-to-run variance).
+        # See reference_amdgpu_hw_claims_with_sources.md.
+        set_default_environment('ZLUDA_PRECISE_MEMORY', '0')
         # Diagnostic: force wave64 at codegen. Sets target-feature
         # -wavefrontsize32,+wavefrontsize64 on each kernel. Causes LLVM
         # SelectionDAG abort on Downsweep as of 2026-04-24, so currently
