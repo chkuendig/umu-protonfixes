@@ -157,6 +157,15 @@ def main() -> None:
         # LATER stores, export SKIP=80 MAX_SITES=128 → sites [80, 208).
         set_default_environment('ZLUDA_DOWNSWEEP_INSTRUMENT_MAX_SITES', '128')
         set_default_environment('ZLUDA_DOWNSWEEP_INSTRUMENT_SKIP', '0')
+        # 2026-04-27: RadixSortScanKernel instrumentation. Captures
+        # warp-0-lane-K's exclusive-prefix `%r94` (what gets STORED to
+        # the cross-warp LDS handshake slot) and thread-T's `%r9` (what
+        # gets READ back after the bar.sync that should publish those
+        # writes). Reuses the DS_DEBUG_BUFFER → /tmp/ds_instrument_witness.bin.
+        # Default ON for the active investigation: distinguishes between
+        # "warp scan failed" (r94=0) and "bar.sync failed to publish"
+        # (r94=8109 but r9=0). See project_morning_briefing_2026_04_27.md.
+        set_default_environment('ZLUDA_SCAN_INSTRUMENT', '1')
         # Diagnostic: force wave64 at codegen. Sets target-feature
         # -wavefrontsize32,+wavefrontsize64 on each kernel. Causes LLVM
         # SelectionDAG abort on Downsweep as of 2026-04-24, so currently
