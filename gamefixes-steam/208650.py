@@ -107,7 +107,16 @@ def main() -> None:
         # completes 10 passes per frame; crash now lands at CreateGrid
         # (a separate, known issue per
         # project_creategrid_dtod_overwrite.md).
-        set_default_environment('ZLUDA_DOWNSWEEP_SCAN_CLAMP', '1')
+        #
+        # **2026-04-27**: now redundant after LLVM PR #161638 backport
+        # (cross-wave LDS visibility fix). The underflow this was clamping
+        # was a downstream symptom of warp 0's writes not being visible to
+        # warp 1; with the fence fixed, the subtract produces correct
+        # values. A/B test (5+5 runs) showed no functional impact (median
+        # kernels: clamp=1 → 254k, clamp=0 → 257k; same crash families).
+        # Default OFF; patch stays in tree as a gated rollback option.
+        # See project_pr161638_breakthrough_2026_04_27.md.
+        set_default_environment('ZLUDA_DOWNSWEEP_SCAN_CLAMP', '0')
         # 2026-04-25 evening: ANDs out bit-31 on every keys_out scatter
         # write inside RadixSortDownsweepKernel. Default OFF until in-game
         # validation lands. Targets the post-SCAN-clamp CreateGrid crash —
