@@ -66,6 +66,10 @@ def main() -> None:
         set_default_environment('ZLUDA_SORT_REPLAY_CAPTURE_BIT', '0')
         set_default_environment('ZLUDA_MS4_CAPTURE', '1')
         set_default_environment('ZLUDA_TFS_CAPTURE', '1')
+        # 2026-04-28: instrument TFS_fieldSamplerPointsKernel to capture per-thread
+        # velocity field reads from TurbulenceFS_dynamicgrid_uvwaTexFS — confirms
+        # whether the "missing smoke effects" symptom is a zero/junk velocity grid.
+        set_default_environment('ZLUDA_TFS_INSTRUMENT', '1')
         set_default_environment('ZLUDA_IOFX_CAPTURE', '0')
         set_default_environment('ZLUDA_IOFX_BBOX_CAPTURE', '0')
         set_default_environment('ZLUDA_DOWNSWEEP_CAPTURE', '1')
