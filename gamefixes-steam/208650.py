@@ -70,6 +70,45 @@ def main() -> None:
         # velocity field reads from TurbulenceFS_dynamicgrid_uvwaTexFS — confirms
         # whether the "missing smoke effects" symptom is a zero/junk velocity grid.
         set_default_environment('ZLUDA_TFS_INSTRUMENT', '1')
+        # 2026-04-28: log every cuMemcpyDtoH{,Async,_ptds} dst/src/size +
+        # first 16 dwords. Mode-B SIGSEGV root-cause hunt: PhysX reads back
+        # rare scalars from GPU; one of them is suspected to drive a
+        # corrupt-count host-side allocation that ends in a NULL-prefix
+        # array iteration crash. Async path syncs the stream before logging.
+        # DISABLED for Phase 2 disambiguation: heavy logging (130k+ lines
+        # per run) perturbs timing — runs went from ~5min crash to 22min
+        # success-but-timeout. Light instrumentation needed for clean A vs
+        # B disambiguation. Re-enable for targeted Phase 3 probes.
+        set_default_environment('ZLUDA_DTOH_LOG', '0')
+        # 2026-04-28: one-shot kernel-arg logger. For each kernel's FIRST
+        # launch, walks kernel_params and logs any 8-byte arg value within
+        # the ZLUDA ALLOC range (likely device pointer). Cross-ref against
+        # DtoH source pointers — confirms whether the always-zero DtoH'd
+        # buffers (e.g., 0x7f84b2400000) are ever bound to a kernel.
+        # 2026-04-28 evening: re-enabled after defensive fix in function.rs:
+        # - Cap walk at 12 indices
+        # - Pre-check kernel_params[i] is in plausible user-space ptr range
+        #   (0x1000 < p < 0x8000_0000_0000_0000) before deref
+        # - Bail on bogus pointers, not just NULL
+        set_default_environment('ZLUDA_KARG_LOG', '1')
+        # 2026-04-29 Phase 3a Path 1b: sample first qword of each 1040000-byte
+        # cuMemHostAlloc'd buffer at alloc time and every 1000th kernel launch.
+        # Goal: identify which buffer's slot-0 stays NULL leading up to crash;
+        # diff PASS vs FAIL trajectories to localize the missing-init.
+        set_default_environment('ZLUDA_HOSTBUF_SAMPLE', '1')
+        # 2026-04-28 Phase 3a probe: insert membar.cta before every bar.sync 0
+        # in IOFX_actorRangeKernel. A/B test for the LDS-publish hypothesis —
+        # IOFX_actorRangeKernel was the last kernel before Phase 2 run 1's
+        # SIGABRT (Mode A) and is upstream of Mode B SIGSEGV array-NULL data.
+        # If this changes the crash distribution across 5+5 runs, PR #161638
+        # is incomplete for some access pattern. Default OFF; protonfix
+        # turns it ON for the probe runs.
+        set_default_environment('ZLUDA_IOFX_ACTOR_MEMBAR', '0')
+        # 2026-04-29 broad workaround: insert membar.cta before every
+        # bar.sync 0 in PhysX/FleX/TFS/IOFX/MS_*/MemCopy* kernels (skips
+        # CUB which has its own micro-barrier patterns + PR #161638 fix).
+        # Tests if the LDS-publish bug is broader than just IOFX_actorRange.
+        set_default_environment('ZLUDA_BROAD_MEMBAR', '0')
         set_default_environment('ZLUDA_IOFX_CAPTURE', '0')
         set_default_environment('ZLUDA_IOFX_BBOX_CAPTURE', '0')
         set_default_environment('ZLUDA_DOWNSWEEP_CAPTURE', '1')
@@ -85,7 +124,7 @@ def main() -> None:
         # wild store from Downsweep into what would otherwise be unmapped
         # memory. Identifies where the wild pointer comes from without
         # modifying any kernel.
-        set_default_environment('ZLUDA_SORT_GUARD', '0')
+        set_default_environment('ZLUDA_SORT_GUARD', '1')
         # WAR-barrier patch for CUB Downsweep digit-offset LDS read.
         # Inserts `bar.sync 0;` before the `mul.wide.u32 _, _, 4 ;
         # add.s64 _, %rd<lds_base>, _ ; ld.shared.u32 _, [_]` triplet to
