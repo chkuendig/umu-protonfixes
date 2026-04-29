@@ -103,13 +103,36 @@ def main() -> None:
         # If this changes the crash distribution across 5+5 runs, PR #161638
         # is incomplete for some access pattern. Default OFF; protonfix
         # turns it ON for the probe runs.
-        set_default_environment('ZLUDA_IOFX_ACTOR_MEMBAR', '0')
-        # 2026-04-29 broad workaround: insert membar.cta before every
-        # bar.sync 0 in PhysX/FleX/TFS/IOFX/MS_*/MemCopy* kernels (skips
-        # CUB which has its own micro-barrier patterns + PR #161638 fix).
-        # Tests if the LDS-publish bug is broader than just IOFX_actorRange.
-        set_default_environment('ZLUDA_BROAD_MEMBAR', '0')
-        set_default_environment('ZLUDA_IOFX_CAPTURE', '0')
+        # 2026-04-29 Phase 3g: re-enable membar.cta before bar.sync 0 in
+        # IOFX_actorRangeKernel. Phase 3e localized this kernel as the
+        # dominant fault producer (100/274 = 37%). Single-run validation
+        # showed AF=1009 SIGSEGV with 0 GPU page faults (IOFX wild-scatter
+        # eliminated; crash moved downstream to IOFX_volumeMigrationKernel).
+        set_default_environment('ZLUDA_IOFX_ACTOR_MEMBAR', '1')
+        # 2026-04-29: also enable broad membar across PhysX/FleX/TFS/IOFX
+        # kernels — the LDS visibility class affects more than just
+        # actorRangeKernel (e.g. IOFX_volumeMigrationKernel was next).
+        # Earlier 3-run test of broad alone showed 0/3, but that was
+        # without the s_waitcnt restore + IOFX-actor-membar combo;
+        # re-validating in this layered configuration.
+        set_default_environment('ZLUDA_BROAD_MEMBAR', '1')
+        # 2026-04-29: broad volatile shared loads across PhysX/FleX/TFS/IOFX
+        # kernels. IOFX-only version eliminated IOFX wild scatter (5/5 runs
+        # zero IOFX faults) but Mode B SIGSEGVs continued from TFS/ParticleIOS
+        # family kernels with the same LDS visibility class. Broadened to
+        # match the same kernel prefixes as patch_broad_membar.
+        set_default_environment('ZLUDA_BROAD_VOLATILE_LDS', '1')
+        # 2026-04-29 Phase 3g: HDP-flush experiment. Mode B SIGSEGVs continue
+        # even after LDS-visibility patches eliminated GPU page faults. Adds
+        # hipDeviceSynchronize + CPU memory fence after every cuStreamSynchronize.
+        # Tests whether the bug is HDP cache lag for zero-copy mapped memory
+        # (NVIDIA's cuStreamSynchronize implicitly flushes HDP; HIP may not).
+        set_default_environment('ZLUDA_HDP_FLUSH_ON_SYNC', '1')
+        # 2026-04-29: enabled to capture input_324, input_329 + pre/post output
+        # state for IOFX_actorRangeKernel — Phase 3e localized this kernel as
+        # the dominant fault producer (100/274 events). We now want to inspect
+        # input values to distinguish "wild input data" vs "kernel codegen bug".
+        set_default_environment('ZLUDA_IOFX_CAPTURE', '1')
         set_default_environment('ZLUDA_IOFX_BBOX_CAPTURE', '0')
         set_default_environment('ZLUDA_DOWNSWEEP_CAPTURE', '1')
         # 2026-04-26 NIGHT: pair Scan capture with Downsweep capture so we
