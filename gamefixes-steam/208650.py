@@ -152,6 +152,9 @@ def main() -> None:
         # Inserts `bar.sync 0;` before the `mul.wide.u32 _, _, 4 ;
         # add.s64 _, %rd<lds_base>, _ ; ld.shared.u32 _, [_]` triplet to
         # close the LDS WAR hazard between phases that share temp_storage.
+        # ZLUDA_DOWNSWEEP_WAR_BARRIER: env-var no longer read by the
+        # current code (the corresponding patch was removed). Left as
+        # dead config until full cleanup pass.
         set_default_environment('ZLUDA_DOWNSWEEP_WAR_BARRIER', '0')
         # Rank-mask DIAGNOSTIC: clamp the scatter-rank register to 14 bits
         # right after `add.s32` and before `cvt.s64.s32 / mul.wide.s32`.
@@ -182,12 +185,19 @@ def main() -> None:
         # kernels: clamp=1 → 254k, clamp=0 → 257k; same crash families).
         # Default OFF; patch stays in tree as a gated rollback option.
         # See project_pr161638_breakthrough_2026_04_27.md.
+        # SCAN_CLAMP overwrites computed values (clamps subtract result
+        # to >=0 with max.s32). User direction 2026-05-05: NEVER mutate
+        # computed values to mask bugs — only sync/barrier fixes are
+        # legitimate. Keep OFF.
         set_default_environment('ZLUDA_DOWNSWEEP_SCAN_CLAMP', '0')
         # 2026-04-25 evening: ANDs out bit-31 on every keys_out scatter
         # write inside RadixSortDownsweepKernel. Default OFF until in-game
         # validation lands. Targets the post-SCAN-clamp CreateGrid crash —
         # see project_phase12_pr145902_live_2026_04_25.md and
         # project_creategrid_post_scan_clamp_2026_04_25.md.
+        # CLEAR_BIT31 overwrites bit 31 of every keys_out scatter write
+        # — mutates computed values to mask bugs. User direction
+        # 2026-05-05: NEVER mutate values. Keep OFF.
         set_default_environment('ZLUDA_DOWNSWEEP_CLEAR_BIT31', '0')
         # 2026-04-26: ZLUDA_DOWNSWEEP_BLOCKSCAN_PRESYNC retired —
         # superseded by the explicit s_waitcnt(0) added to the bar_sync
@@ -298,7 +308,38 @@ def main() -> None:
         # Default 0; flip to 1 via 208650.env to test.
         set_default_environment('ZLUDA_PHYSX_WAR_BARRIERS', '0')
         set_default_environment('PROTON_LOG', '0')
+        # Phase 0b probe (iter48+iter49, 2026-05-05): retest of disabling
+        # FeatureBackOffBarrier. Result: HARMFUL. Both runs crashed early
+        # (35k, 55k kernels) in CUB RadixSort with 10/20 dmesg page faults
+        # vs the keep-enabled baseline of ~385k kernels with 0 dmesg. Revert.
+        # This matches project_back_off_barrier_disable_hung_replay_2026_04_26.md.
+        # Keep the env-gate in compile.rs but don't set it on by default.
+        # SubResource path findings (2026-05-05, iter46–iter54):
+        # iter42/iter43 had clean TFS-late crashes (0 dmesg). After that
+        # almost every run crashed in CUB RadixSort with 10+ dmesg page
+        # faults. iter53 fully completed (418k) but iter54 crashed at
+        # 47k — confirms that's a flaky single outcome.
+        #
+        # Diagnosis: the SubResource impl makes PhysX use real D3D11
+        # textures via hipArray, which exercises CUB Radix Sort with
+        # different/larger inputs than the no-interop fallback path.
+        # Existing CUB Downsweep patches (scan_clamp, clear_bit31,
+        # war_phase_barrier, blockscan_presync, broad_volatile_lds)
+        # were tuned for the smaller workload — they don't cover this
+        # new access pattern.
+        #
+        # NEXT: extend the CUB Downsweep patch family for the new
+        # access pattern, NOT disable the interop. Env toggles
+        # ZLUDA_D3D11_SUBRESOURCE / ZLUDA_D3D11_ARRAY_REFRESH live in
+        # compile.rs / d3d11_interop.rs respectively as test toggles
+        # but are NOT set here.
         set_default_environment('DXVK_LOG_LEVEL', 'warn')
+        # DXVK normally routes logs through Wine's __wine_dbg_output, which
+        # WINEDEBUG=-all silences. DXVK_LOG_PATH=/tmp makes DXVK write
+        # <exe>_d3d11.log etc directly, bypassing Wine debug entirely so
+        # our ZLUDA-DXVK warn/err messages from CopySurfaceToExternalBuffer
+        # / CopyExternalBufferToSurface land somewhere inspectable.
+        set_default_environment('DXVK_LOG_PATH', '/tmp')
         set_default_environment('WINEDEBUG', '-all')
         # HIP runtime logging OFF — AMD_LOG_LEVEL>0 triggers ProfilingSignal race
         set_default_environment('AMD_LOG_LEVEL', '0')
