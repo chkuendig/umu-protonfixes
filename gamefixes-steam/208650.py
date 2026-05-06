@@ -116,12 +116,19 @@ def main() -> None:
         # without the s_waitcnt restore + IOFX-actor-membar combo;
         # re-validating in this layered configuration.
         set_default_environment('ZLUDA_BROAD_MEMBAR', '1')
-        # 2026-04-29: broad volatile shared loads across PhysX/FleX/TFS/IOFX
-        # kernels. IOFX-only version eliminated IOFX wild scatter (5/5 runs
-        # zero IOFX faults) but Mode B SIGSEGVs continued from TFS/ParticleIOS
-        # family kernels with the same LDS visibility class. Broadened to
-        # match the same kernel prefixes as patch_broad_membar.
-        set_default_environment('ZLUDA_BROAD_VOLATILE_LDS', '1')
+        # Option A REFUTED (2026-05-05, iter86-iter92): patch_scan_kernel_reader_acquire
+        # (membar.cta AFTER bar.sync 0 in RadixSortScanKernel) was harmful.
+        # 5 runs: iter87(29k MS_4), iter88(10k CUB), iter89(9k IOFX), iter91(95k IOFX),
+        # iter92(3k TFS). 0/5 complete, all <100k vs baseline 35% complete with
+        # range 14k-419k. The doubled membar.cta in ScanKernel (broad_membar adds
+        # before, scan_acquire adds after) appears to break ScanKernel's algorithm.
+        set_default_environment('ZLUDA_SCAN_READER_ACQUIRE', '0')
+        # 2026-05-06 (Phase 2.1): superseded by codegen-layer fix in
+        # zluda/ptx/src/pass/llvm/emit.rs::emit_ld — `ld.shared` loads
+        # are now unconditionally emitted as volatile LLVM loads at the
+        # PTX→IR translation level. The PTX-text patch_broad_volatile_lds
+        # is now redundant; disabling. See plan resilient-sprouting-pie.md.
+        set_default_environment('ZLUDA_BROAD_VOLATILE_LDS', '0')
         # 2026-04-29 Phase 3g: HDP-flush experiment. Mode B SIGSEGVs continue
         # even after LDS-visibility patches eliminated GPU page faults. Adds
         # hipDeviceSynchronize + CPU memory fence after every cuStreamSynchronize.
@@ -185,11 +192,15 @@ def main() -> None:
         # kernels: clamp=1 → 254k, clamp=0 → 257k; same crash families).
         # Default OFF; patch stays in tree as a gated rollback option.
         # See project_pr161638_breakthrough_2026_04_27.md.
-        # SCAN_CLAMP overwrites computed values (clamps subtract result
-        # to >=0 with max.s32). User direction 2026-05-05: NEVER mutate
-        # computed values to mask bugs — only sync/barrier fixes are
-        # legitimate. Keep OFF.
-        set_default_environment('ZLUDA_DOWNSWEEP_SCAN_CLAMP', '0')
+        # SCAN_CLAMP and IOFX_ACTOR_64BIT_GUARD — REMOVED 2026-05-06.
+        # User clarified the strict no-mutation policy: replacing a
+        # crashing wrong value with a non-crashing wrong value is still
+        # value mutation. The functions were deleted from module.rs.
+        # Real fix path is at codegen layer (see plan
+        # resilient-sprouting-pie.md): force volatile=true for ld.shared
+        # in PTX translator, and use inline-asm s_waitcnt 0 in the
+        # bar_sync C++ wrapper instead of LLVM-fence which gets optimized
+        # away. These codegen fixes are universal across all kernels.
         # 2026-04-25 evening: ANDs out bit-31 on every keys_out scatter
         # write inside RadixSortDownsweepKernel. Default OFF until in-game
         # validation lands. Targets the post-SCAN-clamp CreateGrid crash —
@@ -314,6 +325,14 @@ def main() -> None:
         # vs the keep-enabled baseline of ~385k kernels with 0 dmesg. Revert.
         # This matches project_back_off_barrier_disable_hung_replay_2026_04_26.md.
         # Keep the env-gate in compile.rs but don't set it on by default.
+        # iter66/iter67 probe (2026-05-05): disabled B→A reverse blit
+        # to test whether dxvk-submit page faults are caused by our
+        # CopyExternalBufferToSurface. Result: REFUTED. iter66 (332k
+        # IOFX_actorRange) and iter67 (67k CUB Downsweep) both still
+        # produced both TCP write (compute) and CB/DB read (graphics
+        # cascade) page faults. The dxvk-submit fault is a downstream
+        # consequence of the compute-side TCP write fault, not an
+        # independent issue. Reverted (env-gate stays in code).
         # SubResource path findings (2026-05-05, iter46–iter54):
         # iter42/iter43 had clean TFS-late crashes (0 dmesg). After that
         # almost every run crashed in CUB RadixSort with 10+ dmesg page
