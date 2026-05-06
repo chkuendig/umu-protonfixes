@@ -115,6 +115,11 @@ def main() -> None:
         # Earlier 3-run test of broad alone showed 0/3, but that was
         # without the s_waitcnt restore + IOFX-actor-membar combo;
         # re-validating in this layered configuration.
+        # 2026-05-06: smoke regression isolated to D3D11 SubResource
+        # hipArray path (commit 70683673), NOT this. Re-enabled. The
+        # broad_membar PTX rewrite inserts membar.cta before bar.sync 0
+        # in every kernel; codegen-level Phase 2.2 will eventually
+        # supersede it via inline-asm s_waitcnt 0 in the bar_sync wrapper.
         set_default_environment('ZLUDA_BROAD_MEMBAR', '1')
         # Option A REFUTED (2026-05-05, iter86-iter92): patch_scan_kernel_reader_acquire
         # (membar.cta AFTER bar.sync 0 in RadixSortScanKernel) was harmful.
@@ -347,11 +352,16 @@ def main() -> None:
         # were tuned for the smaller workload — they don't cover this
         # new access pattern.
         #
-        # NEXT: extend the CUB Downsweep patch family for the new
-        # access pattern, NOT disable the interop. Env toggles
-        # ZLUDA_D3D11_SUBRESOURCE / ZLUDA_D3D11_ARRAY_REFRESH live in
-        # compile.rs / d3d11_interop.rs respectively as test toggles
-        # but are NOT set here.
+        # 2026-05-06 CONFIRMED: SubResource path (commit 70683673
+        # "implement cuGraphicsSubResourceGetMappedArray") breaks
+        # PhysX TurbulenceFS smoke rendering. Verified via bisect:
+        # smoke is RESTORED with this env var disabling the path,
+        # smoke is BROKEN with default (=1) regardless of broad_membar
+        # / codegen-volatile-loads state. Falls back to NOT_SUPPORTED
+        # (PhysX uses non-interop memcpy path). Lose zero-copy perf
+        # but smoke renders correctly. Investigation plan:
+        # ~/.claude/plans/d3d11-subresource-smoke-investigation.md
+        set_default_environment('ZLUDA_D3D11_SUBRESOURCE', '0')
         set_default_environment('DXVK_LOG_LEVEL', 'warn')
         # DXVK normally routes logs through Wine's __wine_dbg_output, which
         # WINEDEBUG=-all silences. DXVK_LOG_PATH=/tmp makes DXVK write
