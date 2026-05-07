@@ -108,6 +108,13 @@ def main() -> None:
         # dominant fault producer (100/274 = 37%). Single-run validation
         # showed AF=1009 SIGSEGV with 0 GPU page faults (IOFX wild-scatter
         # eliminated; crash moved downstream to IOFX_volumeMigrationKernel).
+        # 2026-05-07 (Phase 2.2 REFUTED): wrapper-alone N=4 = 0/4
+        # complete vs baseline 30%. 2× IOFX, 2× FleX ParticleIOS
+        # crashes. The PTX-text membar.cta patches were NOT redundant
+        # with the bar_sync wrapper's s_waitcnt — likely because:
+        #   (a) membar.cta scope differs from workgroup s_waitcnt
+        #   (b) some bar.sync sites don't route through the wrapper
+        # Re-enabling. See project_phase22_wrapper_alone_refuted_2026_05_07.md
         set_default_environment('ZLUDA_IOFX_ACTOR_MEMBAR', '1')
         # 2026-04-29: also enable broad membar across PhysX/FleX/TFS/IOFX
         # kernels — the LDS visibility class affects more than just
@@ -116,10 +123,12 @@ def main() -> None:
         # without the s_waitcnt restore + IOFX-actor-membar combo;
         # re-validating in this layered configuration.
         # 2026-05-06: smoke regression isolated to D3D11 SubResource
-        # hipArray path (commit 70683673), NOT this. Re-enabled. The
-        # broad_membar PTX rewrite inserts membar.cta before bar.sync 0
-        # in every kernel; codegen-level Phase 2.2 will eventually
-        # supersede it via inline-asm s_waitcnt 0 in the bar_sync wrapper.
+        # hipArray path (commit 70683673), NOT this. The broad_membar
+        # PTX rewrite inserts membar.cta before bar.sync 0 in every
+        # kernel; codegen-level Phase 2.2 supersedes it.
+        # 2026-05-07 (Phase 2.2 REFUTED): same N=4 batch as
+        # ZLUDA_IOFX_ACTOR_MEMBAR — wrapper alone cannot cover what
+        # this broad PTX rewrite catches. Re-enabling.
         set_default_environment('ZLUDA_BROAD_MEMBAR', '1')
         # Option A REFUTED (2026-05-05, iter86-iter92): patch_scan_kernel_reader_acquire
         # (membar.cta AFTER bar.sync 0 in RadixSortScanKernel) was harmful.
