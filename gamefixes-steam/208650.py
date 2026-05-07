@@ -137,6 +137,14 @@ def main() -> None:
         # range 14k-419k. The doubled membar.cta in ScanKernel (broad_membar adds
         # before, scan_acquire adds after) appears to break ScanKernel's algorithm.
         set_default_environment('ZLUDA_SCAN_READER_ACQUIRE', '0')
+        # 2026-05-07 (Phase 3 REFUTED): hipDeviceSynchronize after
+        # hipTexObjectCreate (default ON in tex.rs::object_create per
+        # commit pending) caused 0/3 valid runs vs baseline 30% — all
+        # 3 crashed in FleX kernels (MemCopyBatchedAsync, ParticleIOS_*).
+        # Hypothesis: per-tex-object device-wide sync stalls disrupt
+        # FleX timing, exposing latent races. Disable default.
+        # See project_phase3_texobj_sync_refuted_2026_05_07.md.
+        set_default_environment('ZLUDA_TEXOBJ_SYNC', '0')
         # 2026-05-06 (Phase 2.1): superseded by codegen-layer fix in
         # zluda/ptx/src/pass/llvm/emit.rs::emit_ld — `ld.shared` loads
         # are now unconditionally emitted as volatile LLVM loads at the
