@@ -352,16 +352,22 @@ def main() -> None:
         # were tuned for the smaller workload — they don't cover this
         # new access pattern.
         #
-        # 2026-05-06 CONFIRMED: SubResource path (commit 70683673
-        # "implement cuGraphicsSubResourceGetMappedArray") breaks
-        # PhysX TurbulenceFS smoke rendering. Verified via bisect:
-        # smoke is RESTORED with this env var disabling the path,
-        # smoke is BROKEN with default (=1) regardless of broad_membar
-        # / codegen-volatile-loads state. Falls back to NOT_SUPPORTED
-        # (PhysX uses non-interop memcpy path). Lose zero-copy perf
-        # but smoke renders correctly. Investigation plan:
-        # ~/.claude/plans/d3d11-subresource-smoke-investigation.md
+        # 2026-05-06 — F1 REFUTED. Both SubResource path enabled with
+        # F1 (refresh no-op) AND SubResource path returning a valid
+        # hipArray with refresh disabled break PhysX smoke. The mere
+        # ACT of get_mapped_array returning success makes PhysX
+        # activate a D3D11-textures code path that bypasses smoke
+        # rendering. Per commit 70683673's own message: NOT_SUPPORTED
+        # makes PhysX "give up on textures and use its own internal
+        # buffers" — that internal-buffer path is what produces
+        # working smoke. The "zero-copy" SubResource path is what
+        # broke it. Until we understand what data PhysX expects
+        # through SubResource (it never binds the hipArray to any
+        # texref/tex/surf object — see project memory), default to
+        # NOT_SUPPORTED. ZLUDA_D3D11_ARRAY_REFRESH=0 retained as the
+        # safe default in code in case anyone forces SubResource on.
         set_default_environment('ZLUDA_D3D11_SUBRESOURCE', '0')
+        set_default_environment('ZLUDA_D3D11_ARRAY_REFRESH', '0')
         set_default_environment('DXVK_LOG_LEVEL', 'warn')
         # DXVK normally routes logs through Wine's __wine_dbg_output, which
         # WINEDEBUG=-all silences. DXVK_LOG_PATH=/tmp makes DXVK write
