@@ -369,16 +369,15 @@ def main() -> None:
         # were tuned for the smaller workload — they don't cover this
         # new access pattern.
         #
-        # 2026-05-08 Phase A.1 verdict: H1 REFUTED.
-        # Canary probe (run_20260508_134136_canary_v2): 27 hipArrays
-        # filled with 0xDEADBEEF, 2526 readbacks during active smoke
-        # simulation, ALL show buf=[deadbeef deadbeef deadbeef deadbeef].
-        # APEX does NOT write to our hipArray via surf2Dwrite. The
-        # smoke regression is NOT about array contents.
-        # See project_canary_h1_refuted_2026_05_08.md.
-        # Reverting to SUBRESOURCE=0 (smoke works). Next probe: gate
-        # PE-side CopySurfaceToExternalBuffer blit OFF to test H4
-        # (dev_ptr reads) vs H5 (APEX code-branch on success).
+        # 2026-05-08 Phase A.2.1 verdict: H5 CONFIRMED.
+        # SUBRESOURCE=1 + PE_BLIT=0 still produced no smoke. The
+        # PE-side DXVK blit is innocent — smoke breakage is purely
+        # the success-of-call return value of getMappedArray. Combined
+        # with H1 refutation (canary), the smoke-breaker is APEX
+        # flipping into a wrong code branch when SubResource is
+        # "supported" by the platform.
+        # Reverting to SUBRESOURCE=0 (working smoke).
+        # See project_h5_subresource_branch_flip_2026_05_08.md.
         set_default_environment('ZLUDA_D3D11_SUBRESOURCE', '0')
         set_default_environment('ZLUDA_D3D11_ARRAY_REFRESH', '0')
         set_default_environment('ZLUDA_D3D11_CANARY', '0')
