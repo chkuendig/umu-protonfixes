@@ -369,18 +369,16 @@ def main() -> None:
         # were tuned for the smaller workload — they don't cover this
         # new access pattern.
         #
-        # 2026-05-08 Phase A.2.1 verdict: H5 CONFIRMED.
-        # SUBRESOURCE=1 + PE_BLIT=0 still produced no smoke. The
-        # PE-side DXVK blit is innocent — smoke breakage is purely
-        # the success-of-call return value of getMappedArray. Combined
-        # with H1 refutation (canary), the smoke-breaker is APEX
-        # flipping into a wrong code branch when SubResource is
-        # "supported" by the platform.
-        # Reverting to SUBRESOURCE=0 (working smoke).
-        # See project_h5_subresource_branch_flip_2026_05_08.md.
-        set_default_environment('ZLUDA_D3D11_SUBRESOURCE', '0')
-        set_default_environment('ZLUDA_D3D11_ARRAY_REFRESH', '0')
-        set_default_environment('ZLUDA_D3D11_CANARY', '0')
+        # 2026-05-09 Phase A.HSA-wired: SubResource ON with the new
+        # path-(b) HSA-backed array (commits A.HSA.0–5 + this iteration).
+        # ensure_hip_array now creates an HSA image bound to the
+        # imported D3D11 buffer; surf::object_create returns the HSA
+        # image's gfx10 T# pointer as the surface object. Kernel
+        # surf2Dwrite writes through to the original D3D11 memory
+        # (validated end-to-end by d3d11_interop_hsa_test).
+        # If smoke renders: ship. If not: investigate which CUDA API
+        # APEX inspects post-success that we haven't covered yet.
+        set_default_environment('ZLUDA_D3D11_SUBRESOURCE', '1')
         set_default_environment('DXVK_LOG_LEVEL', 'warn')
         # DXVK normally routes logs through Wine's __wine_dbg_output, which
         # WINEDEBUG=-all silences. DXVK_LOG_PATH=/tmp makes DXVK write
