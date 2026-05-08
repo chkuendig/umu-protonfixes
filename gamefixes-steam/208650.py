@@ -369,22 +369,19 @@ def main() -> None:
         # were tuned for the smaller workload — they don't cover this
         # new access pattern.
         #
-        # 2026-05-06 — F1 REFUTED. Both SubResource path enabled with
-        # F1 (refresh no-op) AND SubResource path returning a valid
-        # hipArray with refresh disabled break PhysX smoke. The mere
-        # ACT of get_mapped_array returning success makes PhysX
-        # activate a D3D11-textures code path that bypasses smoke
-        # rendering. Per commit 70683673's own message: NOT_SUPPORTED
-        # makes PhysX "give up on textures and use its own internal
-        # buffers" — that internal-buffer path is what produces
-        # working smoke. The "zero-copy" SubResource path is what
-        # broke it. Until we understand what data PhysX expects
-        # through SubResource (it never binds the hipArray to any
-        # texref/tex/surf object — see project memory), default to
-        # NOT_SUPPORTED. ZLUDA_D3D11_ARRAY_REFRESH=0 retained as the
-        # safe default in code in case anyone forces SubResource on.
+        # 2026-05-08 Phase A.1 verdict: H1 REFUTED.
+        # Canary probe (run_20260508_134136_canary_v2): 27 hipArrays
+        # filled with 0xDEADBEEF, 2526 readbacks during active smoke
+        # simulation, ALL show buf=[deadbeef deadbeef deadbeef deadbeef].
+        # APEX does NOT write to our hipArray via surf2Dwrite. The
+        # smoke regression is NOT about array contents.
+        # See project_canary_h1_refuted_2026_05_08.md.
+        # Reverting to SUBRESOURCE=0 (smoke works). Next probe: gate
+        # PE-side CopySurfaceToExternalBuffer blit OFF to test H4
+        # (dev_ptr reads) vs H5 (APEX code-branch on success).
         set_default_environment('ZLUDA_D3D11_SUBRESOURCE', '0')
         set_default_environment('ZLUDA_D3D11_ARRAY_REFRESH', '0')
+        set_default_environment('ZLUDA_D3D11_CANARY', '0')
         set_default_environment('DXVK_LOG_LEVEL', 'warn')
         # DXVK normally routes logs through Wine's __wine_dbg_output, which
         # WINEDEBUG=-all silences. DXVK_LOG_PATH=/tmp makes DXVK write
