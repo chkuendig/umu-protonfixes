@@ -369,16 +369,19 @@ def main() -> None:
         # were tuned for the smaller workload — they don't cover this
         # new access pattern.
         #
-        # 2026-05-09 Phase A.HSA-wired: SubResource ON with the new
-        # path-(b) HSA-backed array (commits A.HSA.0–5 + this iteration).
-        # ensure_hip_array now creates an HSA image bound to the
-        # imported D3D11 buffer; surf::object_create returns the HSA
-        # image's gfx10 T# pointer as the surface object. Kernel
-        # surf2Dwrite writes through to the original D3D11 memory
-        # (validated end-to-end by d3d11_interop_hsa_test).
-        # If smoke renders: ship. If not: investigate which CUDA API
-        # APEX inspects post-success that we haven't covered yet.
-        set_default_environment('ZLUDA_D3D11_SUBRESOURCE', '1')
+        # 2026-05-09 Phase A.HSA-wired: HSA path SHIPPED in code
+        # (d3d11_interop.rs::ensure_hip_array creates HSA image,
+        # surf::object_create synthesizes T# from image.handle) but
+        # default DISABLED via SUBRESOURCE=0 because of a regression:
+        # `hsa_ext_image_create_with_layout` has a side effect that
+        # breaks subsequent IOFX_bboxKernel launches. Evidence
+        # (run_20260509_062933_a_hsa_v6 vs iter130/131 baseline):
+        # baseline runs IOFX_bboxKernel 4014–5694× before crash; v6
+        # crashes after only 4 (immediately after first 3 HSA image
+        # creations). HSA work needs deeper investigation before we
+        # can ship interop. See
+        # project_a_hsa_breaks_iofx_bbox_2026_05_09.md.
+        set_default_environment('ZLUDA_D3D11_SUBRESOURCE', '0')
         set_default_environment('DXVK_LOG_LEVEL', 'warn')
         # DXVK normally routes logs through Wine's __wine_dbg_output, which
         # WINEDEBUG=-all silences. DXVK_LOG_PATH=/tmp makes DXVK write
