@@ -173,6 +173,15 @@ def main() -> None:
         # replay test can drive all four prior kernels with their captured
         # args before the actorRange replay.
         set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE', '1')
+        # Buffer-snapshot mode: opt-in DtoD pre/post snapshots of each
+        # chain kernel's pointer args. ZLUDA_IOFX_CHAIN_CAPTURE_BUFS=1
+        # is the diagnostic mode that captures actual buffer contents
+        # for chain replay. Default ON 2026-05-11 after the pointer
+        # heuristic was tightened to v>>40 == 0x7f — earlier loose
+        # heuristic false-positive'd on scalar args, leading
+        # hipMemcpyDtoDAsync to dereference invalid VAs and faulting
+        # PhysX at IOFX_volumeMigrationKernel ~90 launches in.
+        set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE_BUFS', '1')
         # 2026-04-26 NIGHT: pair Scan capture with Downsweep capture so we
         # have post-Upsweep (= pre-Scan) AND post-Scan (= pre-Downsweep)
         # snapshots of d_spine. Lets us pinpoint whether wrong d_spine
