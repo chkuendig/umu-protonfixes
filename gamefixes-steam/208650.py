@@ -162,6 +162,8 @@ def main() -> None:
         # the dominant fault producer (100/274 events). We now want to inspect
         # input values to distinguish "wild input data" vs "kernel codegen bug".
         set_default_environment('ZLUDA_IOFX_CAPTURE', '1')
+        # IOFX_bbox kernel input capture — investigative; default off.
+        # Re-enable via 208650.env when chasing the IOFX_bbox residual.
         set_default_environment('ZLUDA_IOFX_BBOX_CAPTURE', '0')
         set_default_environment('ZLUDA_DOWNSWEEP_CAPTURE', '1')
         # 2026-04-26 NIGHT: pair Scan capture with Downsweep capture so we
@@ -369,14 +371,22 @@ def main() -> None:
         # were tuned for the smaller workload — they don't cover this
         # new access pattern.
         #
-        # 2026-05-09 P1 verdict: HSA image creation is NOT the
-        # culprit. Skipping it (HSA_SKIP_IMAGE=1) still crashes
-        # IOFX_bboxKernel after 4 launches (same as full HSA).
-        # The regression is APEX's interop code branch hitting a
-        # kernel-correctness bug we can't fix without modifying
-        # APEX. Reverting to SUBRESOURCE=0 (working smoke fallback).
-        # See project_p1_hsa_image_innocent_2026_05_09.md.
-        set_default_environment('ZLUDA_D3D11_SUBRESOURCE', '0')
+        # 2026-05-10 D3D11 SubResource interop SHIPPED as default:
+        # Phase E.1 (sentinel-aware cuMemcpy2DAsync_v2 routing) +
+        # Phase E.2 (CopyExternalBufferToSurface reverse blit on
+        # cuGraphicsUnmapResources) = full interop data flow:
+        #   D3D11 image → buffer → CUDA writes → buffer → D3D11 image
+        # Smoke renders, full benchmark completes (417k+ kernels).
+        # Residual crash classes (IOFX_actorRange, MemCopyBatchedAsync,
+        # CUB Downsweep, TFS dynamicGridClear) are pre-existing
+        # FleX-class bugs — same distribution on the SUBRESOURCE=0
+        # baseline path. See plan fluttering-waddling-zephyr.md.
+        set_default_environment('ZLUDA_D3D11_SUBRESOURCE', '1')
+        # Phase A/B diagnostics — code stays in tree gated, defaults
+        # OFF after the investigation hit its goal. Re-enable via
+        # 208650.env for any follow-up investigation.
+        set_default_environment('ZLUDA_D3D11_MEMCPY_LOG', '0')
+        set_default_environment('ZLUDA_SUBRESOURCE_DUMP', '0')
         set_default_environment('DXVK_LOG_LEVEL', 'warn')
         # DXVK normally routes logs through Wine's __wine_dbg_output, which
         # WINEDEBUG=-all silences. DXVK_LOG_PATH=/tmp makes DXVK write
