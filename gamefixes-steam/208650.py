@@ -166,6 +166,13 @@ def main() -> None:
         # Re-enable via 208650.env when chasing the IOFX_bbox residual.
         set_default_environment('ZLUDA_IOFX_BBOX_CAPTURE', '0')
         set_default_environment('ZLUDA_DOWNSWEEP_CAPTURE', '1')
+        # IOFX chain capture for prior-kernel chain replay investigation
+        # (2026-05-11). Captures IOFX_makeSortKeys_templ$0/$1 +
+        # IOFX_remapKernel_templ$0/$1 into /tmp/iofx_chain_captures.bin on
+        # SIGABRT — pairs with the existing actor_range capture so a chain
+        # replay test can drive all four prior kernels with their captured
+        # args before the actorRange replay.
+        set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE', '1')
         # 2026-04-26 NIGHT: pair Scan capture with Downsweep capture so we
         # have post-Upsweep (= pre-Scan) AND post-Scan (= pre-Downsweep)
         # snapshots of d_spine. Lets us pinpoint whether wrong d_spine
