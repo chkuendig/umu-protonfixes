@@ -175,13 +175,14 @@ def main() -> None:
         set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE', '1')
         # Buffer-snapshot mode: opt-in DtoD pre/post snapshots of each
         # chain kernel's pointer args. ZLUDA_IOFX_CHAIN_CAPTURE_BUFS=1
-        # is the diagnostic mode that captures actual buffer contents
-        # for chain replay. Default ON 2026-05-11 after the pointer
-        # heuristic was tightened to v>>40 == 0x7f — earlier loose
-        # heuristic false-positive'd on scalar args, leading
-        # hipMemcpyDtoDAsync to dereference invalid VAs and faulting
-        # PhysX at IOFX_volumeMigrationKernel ~90 launches in.
-        set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE_BUFS', '1')
+        # captures actual buffer contents for chain replay BUT is
+        # use-after-free-unsafe — chain pointers can be freed between
+        # capture and stream-executed DtoD, leading to SIGSEGV inside
+        # hipMemcpyDtoDAsync's argument validation. Verified 2026-05-11
+        # gdb backtrace: capture_iofx_chain_ptr_regions → hip DtoDAsync
+        # segfaults ~60k launches into Batman. Default OFF — only enable
+        # for short-lived investigation runs where the SIGSEGV is OK.
+        set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE_BUFS', '0')
         # 2026-04-26 NIGHT: pair Scan capture with Downsweep capture so we
         # have post-Upsweep (= pre-Scan) AND post-Scan (= pre-Downsweep)
         # snapshots of d_spine. Lets us pinpoint whether wrong d_spine
