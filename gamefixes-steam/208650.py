@@ -182,13 +182,27 @@ def main() -> None:
         # gdb backtrace: capture_iofx_chain_ptr_regions → hip DtoDAsync
         # segfaults ~60k launches into Batman. Default OFF — only enable
         # for short-lived investigation runs where the SIGSEGV is OK.
-        set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE_BUFS', '0')
+        set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE_BUFS', '1')
+        # Sample every Nth chain launch when BUFS=1 to reduce DtoD pressure
+        # (`feedback_no_d2d_from_launch_kernel`). 2026-05-11 evening: needed
+        # to keep chain capture functional past ~374 launches without
+        # IOFX_volumeMigrationKernel fault. Default 64 (1.5% capture rate)
+        # is enough to fill the 16-slot ring with samples spread across a
+        # heavy PhysX run.
+        set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE_BUFS_SAMPLE', '64')
         # 2026-04-26 NIGHT: pair Scan capture with Downsweep capture so we
         # have post-Upsweep (= pre-Scan) AND post-Scan (= pre-Downsweep)
         # snapshots of d_spine. Lets us pinpoint whether wrong d_spine
         # comes from Upsweep or from Scan. Output: /tmp/cub_scan_captures.bin
         # See project_real_root_cause_is_scankernel_2026_04_26.md.
         set_default_environment('ZLUDA_SCAN_CAPTURE', '1')
+        # 2026-05-11 (this session): NEW pre-Scan spine probe wired up in
+        # function.rs::capture_cub_scan_inputs. Snapshots the spine state
+        # AT Scan-kernel entry (= post-Upsweep, pre-Scan) via async DtoD
+        # on the same stream. Compared with cub_downsweep_captures.bin
+        # (post-Scan state), tells us definitively whether the upstream
+        # corruption source for CUB Downsweep is Upsweep or Scan.
+        set_default_environment('ZLUDA_CUB_SCAN_PROBE', '1')
         # Sort-guard probe: when '1', over-allocates 520000-byte allocations
         # (CUB sort temps) with a 512 KB DEADBEEF-filled pre-pad. The SIGABRT
         # handler scans the pad post-mortem — any non-DEADBEEF byte is a
