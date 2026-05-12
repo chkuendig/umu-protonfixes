@@ -166,13 +166,23 @@ def main() -> None:
         # Re-enable via 208650.env when chasing the IOFX_bbox residual.
         set_default_environment('ZLUDA_IOFX_BBOX_CAPTURE', '0')
         set_default_environment('ZLUDA_DOWNSWEEP_CAPTURE', '1')
+        # 2026-05-12 PM: ZLUDA_ALLOC_CANARY=1 was used to disprove the
+        # uninitialized-memory hypothesis (sort buffers are fully
+        # overwritten — no canary survives). Reverted to default zero-fill
+        # because canary may have broken TFS init (E5 crashed at 119s
+        # before PhysX started, suggesting TFS depends on zero-init).
+        # Keep the variable un-set (default = zero) for normal runs.
         # IOFX chain capture for prior-kernel chain replay investigation
         # (2026-05-11). Captures IOFX_makeSortKeys_templ$0/$1 +
         # IOFX_remapKernel_templ$0/$1 into /tmp/iofx_chain_captures.bin on
         # SIGABRT — pairs with the existing actor_range capture so a chain
         # replay test can drive all four prior kernels with their captured
         # args before the actorRange replay.
-        set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE', '1')
+        # 2026-05-12 evening: disabled while we verify chain capture itself
+        # is the dominant SIGSEGV source. Coredump on 2026-05-12 traced 67
+        # crashes across 2 days to capture_iofx_chain_ptr_regions inside
+        # libamdhip64.so.6. See feedback_check_coredump_first.md.
+        set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE', '0')
         # Buffer-snapshot mode: opt-in DtoD pre/post snapshots of each
         # chain kernel's pointer args. ZLUDA_IOFX_CHAIN_CAPTURE_BUFS=1
         # captures actual buffer contents for chain replay BUT is
@@ -182,14 +192,17 @@ def main() -> None:
         # gdb backtrace: capture_iofx_chain_ptr_regions → hip DtoDAsync
         # segfaults ~60k launches into Batman. Default OFF — only enable
         # for short-lived investigation runs where the SIGSEGV is OK.
-        set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE_BUFS', '1')
+        set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE_BUFS', '0')
         # Sample every Nth chain launch when BUFS=1 to reduce DtoD pressure
         # (`feedback_no_d2d_from_launch_kernel`). 2026-05-11 evening: needed
         # to keep chain capture functional past ~374 launches without
-        # IOFX_volumeMigrationKernel fault. Default 64 (1.5% capture rate)
-        # is enough to fill the 16-slot ring with samples spread across a
-        # heavy PhysX run.
-        set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE_BUFS_SAMPLE', '64')
+        # IOFX_volumeMigrationKernel fault.
+        # 2026-05-12 PM: lowered to 16 to catch more NRSS slots
+        # probabilistically — we need to find the NRSS iteration that
+        # introduces bit-31 between makeSortKeys's clean output and
+        # actorRange's read. With ring=128, sample=16 yields ~8 sampled
+        # slots per ring window (mostly NRSS at ~10/frame).
+        set_default_environment('ZLUDA_IOFX_CHAIN_CAPTURE_BUFS_SAMPLE', '16')
         # 2026-04-26 NIGHT: pair Scan capture with Downsweep capture so we
         # have post-Upsweep (= pre-Scan) AND post-Scan (= pre-Downsweep)
         # snapshots of d_spine. Lets us pinpoint whether wrong d_spine
