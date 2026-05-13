@@ -64,7 +64,16 @@ def main() -> None:
         set_default_environment('ZLUDA_CREATEGRID_SNAPSHOT_LOG', '0')
         set_default_environment('ZLUDA_CREATECELL_SNAPSHOT_LOG', '0')
         set_default_environment('ZLUDA_SORT_REPLAY_CAPTURE_BIT', '0')
-        set_default_environment('ZLUDA_MS4_CAPTURE', '1')
+        # 2026-05-13: MS4_CAPTURE is the source of the host-side
+        # launch_kernel→libamdhip64→memcpy residual (50% of N=8 dataset
+        # in 2A+2B). Bisected across 5 phases (N=15) — capture_ms4_launch
+        # emits 4 hipMemcpyDtoD calls per MS_4 launch (function.rs:291/
+        # 298/308) which is exactly the D2D-from-launch_kernel pattern
+        # feedback_no_d2d_from_launch_kernel.md warns about. Re-enable
+        # only for short-lived MS_4-specific investigation runs where a
+        # SIGSEGV is acceptable. See
+        # project_ms4_capture_is_residual_source_2026_05_13.md.
+        set_default_environment('ZLUDA_MS4_CAPTURE', '0')
         set_default_environment('ZLUDA_TFS_CAPTURE', '1')
         # 2026-04-28: instrument TFS_fieldSamplerPointsKernel to capture per-thread
         # velocity field reads from TurbulenceFS_dynamicgrid_uvwaTexFS — confirms
@@ -157,6 +166,10 @@ def main() -> None:
         # Tests whether the bug is HDP cache lag for zero-copy mapped memory
         # (NVIDIA's cuStreamSynchronize implicitly flushes HDP; HIP may not).
         set_default_environment('ZLUDA_HDP_FLUSH_ON_SYNC', '1')
+        # 2026-04-29: enabled to capture input_324, input_329 + pre/post output
+        # state for IOFX_actorRangeKernel — Phase 3e localized this kernel as
+        # the dominant fault producer (100/274 events). We now want to inspect
+        # input values to distinguish "wild input data" vs "kernel codegen bug".
         # 2026-04-29: enabled to capture input_324, input_329 + pre/post output
         # state for IOFX_actorRangeKernel — Phase 3e localized this kernel as
         # the dominant fault producer (100/274 events). We now want to inspect
