@@ -160,6 +160,12 @@ def main() -> None:
         # PTX→IR translation level. The PTX-text patch_broad_volatile_lds
         # is now redundant; disabling. See plan resilient-sprouting-pie.md.
         set_default_environment('ZLUDA_BROAD_VOLATILE_LDS', '0')
+        # 2026-05-14: patch_divergent_lds_merge_sync DROPPED. The synthetic
+        # stress test demonstrated a real NRSS BlockScan race, but in-game
+        # the patch caused regressions in IOFX_bbox/sprite/modifier
+        # kernels where the same pattern detection matched structurally-
+        # safe sites. Reverted to baseline (clean completion at ms1>5700).
+        # See project_handover_2026_05_13_evening.md → future-work.
         # 2026-04-29 Phase 3g: HDP-flush experiment. Mode B SIGSEGVs continue
         # even after LDS-visibility patches eliminated GPU page faults. Adds
         # hipDeviceSynchronize + CPU memory fence after every cuStreamSynchronize.
