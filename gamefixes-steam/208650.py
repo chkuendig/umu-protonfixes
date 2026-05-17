@@ -89,6 +89,44 @@ def main() -> None:
         # success-but-timeout. Light instrumentation needed for clean A vs
         # B disambiguation. Re-enable for targeted Phase 3 probes.
         set_default_environment('ZLUDA_DTOH_LOG', '0')
+        # Plan v13 Step 1 (2026-05-16): small-DtoH timestamped trace.
+        # Routes ≤256B DtoH transfers into /tmp/zluda_tex.log alongside
+        # MS4_ARGS so an offline correlator can find which u32 readback
+        # PhysX subsequently packs into MS_4 param_3 (n_threads). Default
+        # OFF because PhysX issues many small DtoHs per frame and this
+        # adds a stream-sync on the async path.
+        set_default_environment('ZLUDA_DTOH_TRACE', '0')
+        # Plan v13 Step 1C (2026-05-16): scan all cuMemHostAlloc mapped
+        # buffers at each MS_4 launch for the u32 = n_threads. Locates
+        # the host buffer PhysX reads to size the MS_4 grid. Default OFF
+        # because the scan costs ~2.5M comparisons per MS_4 launch
+        # (cumulative across many launches = measurable but tolerable).
+        set_default_environment('ZLUDA_MAPPED_N_SCAN', '0')
+        # Plan v14 Step 1 (2026-05-16): per-kernel mapped-buffer write
+        # tracer. After every cuLaunchKernel + sync, diff each tracked
+        # cuMemHostAlloc buffer vs a mirror and emit [MAPPED_WRITE] lines
+        # per changed u32 slot. Identifies which kernel mutates each
+        # MS_4 n_threads slot. Default OFF: ~6 MB memcmp per launch.
+        set_default_environment('ZLUDA_MAPPED_WRITE_TRACE', '0')
+        # Plan v18 Step 6 (2026-05-17 evening): per-MS_4 actor-entry probe.
+        # Snapshots count + dstr + crea fields per 176-byte stride actor
+        # entry across all 2 MB+ mapped buffers. Default OFF — only useful
+        # for the two-particle-system divergence investigation.
+        set_default_environment('ZLUDA_ACTOR_ENTRY_PROBE', '0')
+        # Plan v18 Step 7 (2026-05-17 evening): MS_4 counter-array sum probe.
+        # At each MS_4 launch, sum the u32 values at p7[0..n_threads] and
+        # log alongside the full-buffer sum + nonzero stats. Surfaces the
+        # gap = n_threads - Σ counter[] which is the inferred underflow
+        # window. Default OFF — single ≤128 KB CPU read per launch when on.
+        set_default_environment('ZLUDA_COUNTER_SUM_PROBE', '0')
+        # Plan v19 Phase C (2026-05-17 evening): MemCopyBatchedAsync src trace.
+        # At each MemCopyBatchedAsync launch, read the descriptor array
+        # (kernarg DEV2 → grid_y × {src,dst,bytes}) and log only the
+        # descriptors whose dst hits the actor-table relay slot (off=663640)
+        # or the upstream relay slot (off=1056768). Identifies the
+        # src device buffer whose contents become MS_4's n_threads.
+        # Default OFF — gated to avoid spam (~6k batches/run).
+        set_default_environment('ZLUDA_MEMCPY_SRC_TRACE', '0')
         # 2026-04-28: one-shot kernel-arg logger. For each kernel's FIRST
         # launch, walks kernel_params and logs any 8-byte arg value within
         # the ZLUDA ALLOC range (likely device pointer). Cross-ref against
@@ -401,6 +439,22 @@ def main() -> None:
         # Investigation gate: strict NULL-stream semantics removed the older
         # n=8827 sort failure and exposed a later n=4688 CreateGrid family.
         set_default_environment('ZLUDA_NULL_STREAM_STRICT', '1')
+        # v7 Step 3-4 (2026-05-16): per-launch logging of MS_1/InitParticleShapes/
+        # MS_2_Batched args + D2D probe of shape_table[*].field8 right before
+        # each MS_4 launch. Both default OFF; flip via 208650.env.
+        set_default_environment('ZLUDA_SHAPE_PIPELINE_LOG', '0')
+        set_default_environment('ZLUDA_SHAPE_TABLE_PROBE', '0')
+        # v7 Step 6: D2D flags slice + count (flags & 0x11)==1 bits to verify
+        # the overcount hypothesis (more pass-flag-check threads than counter
+        # capacity → MS_4 atom-decrement underflow → wild scatter). Default OFF.
+        set_default_environment('ZLUDA_FLAG_COUNT_PROBE', '0')
+        # v10 Step 1 (2026-05-16): probe [pool+22176] counter pre-MS_1.
+        # DISPROVED — counter resets fine; bug is deeper in MS_1's state machine.
+        set_default_environment('ZLUDA_POOL_22176_PROBE', '0')
+        # v11 (2026-05-16): GPU-side MS_1 gate-trace. Patches MS_1 PTX to
+        # insert atomic counters at the bit-4-set gate (4 buckets per
+        # outcome). Allowed as per-kernel-name INSTRUMENTATION (not fix).
+        set_default_environment('ZLUDA_MS1_GATE_TRACE', '0')
         # Opt-in: extended WAR barriers for PhysX sort kernels that reshuffle
         # data entirely within LDS (IOFX_newRadixSortStepKernel and friends).
         # Default 0; flip to 1 via 208650.env to test.
