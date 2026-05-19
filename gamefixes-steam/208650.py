@@ -127,6 +127,54 @@ def main() -> None:
         # src device buffer whose contents become MS_4's n_threads.
         # Default OFF — gated to avoid spam (~6k batches/run).
         set_default_environment('ZLUDA_MEMCPY_SRC_TRACE', '0')
+        # Plan v20.1 D2 (2026-05-18): relay-slot probe. At each MS_4 launch,
+        # read u32 at candidate dst offsets ({657408, 663640, 1056768, 1312768})
+        # in every tracked mapped buffer >= 2 MB, alongside ACTOR_ENTRY_PROBE.
+        # Confirms the relay-chain framing: if v[X] tracks the n_threads
+        # over-count progression, dst-side relay is confirmed. Default OFF.
+        set_default_environment('ZLUDA_RELAY_SLOT_PROBE', '0')
+        # Plan v20.2 D3 (2026-05-18): per-launch v[663640] / v[1056768]
+        # change tracker. At every cuLaunchKernel entry, read the canonical
+        # n_threads carrier slots and log when they change, attributing the
+        # change to the previously-launched kernel (which ran between the
+        # two reads). Default OFF — moderate overhead (~10 mapped buffers ×
+        # 2 reads × 50k launches per run = ~1M atomic-style reads).
+        set_default_environment('ZLUDA_NTHREADS_WRITER', '0')
+        # Plan v20.3 (2026-05-18): n_threads slot barrier read at every
+        # cuLaunchKernel. The silent-read-only mode DOES delay the MS_4
+        # wild-VA crash significantly (~10s baseline → ~350s with barrier)
+        # but does NOT prevent it (D4 run1 crashed at ~365k kernels).
+        # Earlier N=1 "clean to 419k" run with diagnostic logging on was
+        # likely a lucky tail of the bug's high-variance distribution.
+        # Default OFF — set to 1 to A/B compare.
+        set_default_environment('ZLUDA_NTHREADS_BARRIER', '0')
+        # Plan v20.4 option 1 (2026-05-18): hard-sync (hipStreamSynchronize)
+        # immediately before each MS_4 (CreateParticleShapesIncremental_-
+        # MultiStage_4) kernel dispatch. Strongest possible barrier between
+        # the CPU read of n_threads (passed as kernarg) and the kernel's
+        # execution. Targeted to ONLY MS_4 launches (~hundreds per second
+        # at peak), so much lower overhead than full per-launch sync.
+        # Default OFF — set to 1 to A/B compare against ZLUDA_NTHREADS_BARRIER.
+        set_default_environment('ZLUDA_MS4_HARD_SYNC', '0')
+        # Plan v22 Phase B.1 (2026-05-18): per-launch kernarg probe for IOFX
+        # remap / makeSortKeys / newRadixSort / actorRange kernels. Logs the
+        # full kernarg list whenever any kernarg is within 64 MiB of a known
+        # MS_4 DEV5 (p5) address — identifies upstream writers of DEV5 to
+        # cross-reference against MS_4 crash launches. Default OFF.
+        set_default_environment('ZLUDA_REMAP_KARGS', '0')
+        # Plan v24 Phase B.2 (2026-05-18): DEV5 contents DtoH dump. Queue
+        # (dev5_ptr, n_threads, launch_n) tuples from MS_4 launches; drain
+        # at cuMemcpyAsync entry with hipDeviceSynchronize + hipMemcpyDtoH
+        # of up to 1024 u32s. Logs histogram (bit-31 count, huge count,
+        # min, max, first 16 raw values). Identifies the corruption
+        # pattern in DEV5 — does NOT identify the writer kernel.
+        set_default_environment('ZLUDA_DEV5_DUMP', '0')
+        # Plan v26 Phase B.3 (2026-05-19): IOFX_actorRangeKernel param_4
+        # DtoH dump. Producer pushes p4 ptr per launch; consumer drains at
+        # cuEventRecord / cuEventSynchronize. Aimed at verifying offline
+        # finding that param_4's buffer contains bit-31-set wild values
+        # (project_actorrange_wild_input_root_cause_2026_05_11). Default OFF.
+        set_default_environment('ZLUDA_ACTORRANGE_DUMP', '0')
         # 2026-04-28: one-shot kernel-arg logger. For each kernel's FIRST
         # launch, walks kernel_params and logs any 8-byte arg value within
         # the ZLUDA ALLOC range (likely device pointer). Cross-ref against
