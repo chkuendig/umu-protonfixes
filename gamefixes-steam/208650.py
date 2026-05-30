@@ -61,3 +61,7 @@ def main() -> None:
     set_default_environment('ZLUDA_BROAD_MEMBAR', '1')
     set_default_environment('ZLUDA_IOFX_ACTOR_MEMBAR', '1')
     set_default_environment('ZLUDA_LAUNCH_MUTEX', '2')
+    # Batman's PhysX hardware-detection rejects the " [ZLUDA]" suffix vosen
+    # added in upstream; strip it so the raw HIP device name reaches the game
+    # (matches pre-upstream-merge behaviour from the working 9-26-era setup).
+    set_default_environment('ZLUDA_NO_SUFFIX', '1')
