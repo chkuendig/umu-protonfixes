@@ -69,16 +69,10 @@ def main() -> None:
     # serialise like CUDA's). Source default OFF; previous protonfix had it
     # at 1 and that was the validated state on the 9-26 baseline.
     set_default_environment('ZLUDA_NULL_STREAM_STRICT', '1')
-    # D3D11 interop workarounds for Batman PhysX. Both must be set together;
-    # either alone leaves the bench at ~70 simulation kernels before SIGABRT.
-    # Together: ~392 simulation kernels (5.6x further, A/B-verified 2026-05-31).
-    #   ZLUDA_D3D11_SUBRESOURCE=0      -- get_mapped_array returns NOT_SUPPORTED
-    #                                     -> PhysX falls back to non-D3D11 buffers
-    #   ZLUDA_D3D11_HSA_SKIP_IMAGE=1   -- register_imported skips the actual
-    #                                     hsa_ext_image_create call (sentinel only)
-    # Trade-off: D3D11-textured PhysX rendering effects may be missing or render
-    # incorrectly. The residual ParticleIOS CUB-compact crash is a separate
-    # issue (project memory CUB family); these knobs only mitigate the
-    # D3D11-driven early crashes, not the deeper kernel-level race.
-    set_default_environment('ZLUDA_D3D11_SUBRESOURCE', '0')
-    set_default_environment('ZLUDA_D3D11_HSA_SKIP_IMAGE', '1')
+    # D3D11 interop knobs (no defaults — investigation only):
+    #   ZLUDA_D3D11_SUBRESOURCE=0     -- get_mapped_array returns NOT_SUPPORTED
+    #   ZLUDA_D3D11_HSA_SKIP_IMAGE=1  -- register_imported skips HSA image create
+    # 2026-05-31 A/B: a single run got 392 kernels (5.6x further) with both
+    # enabled, but follow-up runs reverted to ~70 kernels — variance, not a
+    # real workaround. Crash is in PhysX CUB ParticleIOS_compactKernel regardless
+    # of D3D11 config. End users can still .env-override to A/B locally.
