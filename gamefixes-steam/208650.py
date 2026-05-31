@@ -52,6 +52,10 @@ def main() -> None:
     # The lib defaults the log path to /tmp/zluda_tex.log (dxvk/wine convention);
     # no ZLUDA_LOG_PATH/ZLUDA_LOG_DIR override needed here.
     set_default_environment('ZLUDA_LOG', '0')
+    set_default_environment('ZLUDA_LOG_ALL', '0')
+    set_default_environment('ZLUDA_LOG_LAUNCHES', '0')
+    set_default_environment('ZLUDA_DTOH_LOG', '0')
+    set_default_environment('ZLUDA_DEBUG', '0')
     set_default_environment('ZLUDA_DUMP_PTX', '0')
 
     # PhysX workarounds not (yet) baked into lib defaults; overridable via .env
@@ -61,3 +65,7 @@ def main() -> None:
     set_default_environment('ZLUDA_BROAD_MEMBAR', '1')
     set_default_environment('ZLUDA_IOFX_ACTOR_MEMBAR', '1')
     set_default_environment('ZLUDA_LAUNCH_MUTEX', '2')
+    # NULL-stream strict: closes a CUDA-spec gap (HIP's null-stream doesn't
+    # serialise like CUDA's). Source default OFF; previous protonfix had it
+    # at 1 and that was the validated state on the 9-26 baseline.
+    set_default_environment('ZLUDA_NULL_STREAM_STRICT', '1')
