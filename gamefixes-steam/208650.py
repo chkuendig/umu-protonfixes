@@ -69,3 +69,10 @@ def main() -> None:
     # serialise like CUDA's). Source default OFF; previous protonfix had it
     # at 1 and that was the validated state on the 9-26 baseline.
     set_default_environment('ZLUDA_NULL_STREAM_STRICT', '1')
+    # Skip HSA image creation for D3D11-imported textures. With it OFF
+    # (default), PhysX crashes at ~70 simulation kernels. With it ON, bench
+    # progresses 5.6x further (392 kernels in 2026-05-31 A/B). Trade-off:
+    # some D3D11-textured PhysX rendering effects may be missing or render
+    # as black, but no early bench-time SIGABRT. The residual ParticleIOS
+    # CUB-compact crash is a separate issue (project memory CUB family).
+    set_default_environment('ZLUDA_D3D11_HSA_SKIP_IMAGE', '1')
