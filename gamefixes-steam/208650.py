@@ -69,6 +69,12 @@ def main() -> None:
     # serialise like CUDA's). Source default OFF; previous protonfix had it
     # at 1 and that was the validated state on the 9-26 baseline.
     set_default_environment('ZLUDA_NULL_STREAM_STRICT', '1')
+    # Defensive zeroing of *(rd5+22176) between MS-chain cycles. Validated
+    # 2026-05-23 (project_ms1_rd5_reset_fixes_ms4_cascade_2026_05_22.md):
+    # 839k clean launches N=5 vs ~2k baseline (415x). Restored to function.rs
+    # 2026-06-01 after being stripped by 1aa7ba3a's over-aggressive "clean up
+    # investigation probes" pass.
+    set_default_environment('ZLUDA_MS1_RD5_RESET', '1')
     # D3D11 interop knobs (no defaults — investigation only):
     #   ZLUDA_D3D11_SUBRESOURCE=0     -- get_mapped_array returns NOT_SUPPORTED
     #   ZLUDA_D3D11_HSA_SKIP_IMAGE=1  -- register_imported skips HSA image create
