@@ -75,6 +75,24 @@ def main() -> None:
     # 2026-06-01 after being stripped by 1aa7ba3a's over-aggressive "clean up
     # investigation probes" pass.
     set_default_environment('ZLUDA_MS1_RD5_RESET', '1')
+    # 2026-06-02 iter1: ZLUDA_MS4_POST_SYNC=1 → 580 launches, MS_4 GPU fault.
+    # No clear improvement vs without it (639 / 283k). Disabled.
+    # 2026-06-02 iter2: 8 probe env vars (TEXOBJ_SYNC=0 etc.) → 1028 launches but
+    # crashed on compactKernel during PhysX init (same as pre-LD_PRELOAD class).
+    # Reverted - the env vars DISABLE sync workarounds and re-introduce races.
+
+    # 2026-06-02 env-var iteration log (iter5..iter8, all rejected):
+    # iter5: HSA_ENABLE_SCRATCH_ONCE=0 + HSA_NO_SCRATCH_RECLAIM=0 → no change (552, early host crash)
+    # iter6: GPU_MAX_HW_QUEUES=1 → no change (552-62k)
+    # iter7: HIP_LAUNCH_BLOCKING=1 → 147k CUB scan crash (different class)
+    # iter8: combined LAUNCH_BLOCKING + HW_QUEUES=1 + HSA_ENABLE_INTERRUPT=0
+    #        → game HUNG at 63 launches (HIP_LAUNCH_BLOCKING too slow under combo)
+    # Distribution of crash classes (ParticleIOS host / IOFX_actorRange GPU /
+    # TFS / CUB scan) is essentially identical across all configs. The
+    # residual is the Wine-10.0-amplified ROCm 6.2.4 ProfilingSignal pool
+    # growth race + the documented IOFX_actorRange cross-stream texref race;
+    # neither is fixable via protonfix env vars. Reverted to iter4 baseline.
+
     # D3D11 interop knobs (no defaults — investigation only):
     #   ZLUDA_D3D11_SUBRESOURCE=0     -- get_mapped_array returns NOT_SUPPORTED
     #   ZLUDA_D3D11_HSA_SKIP_IMAGE=1  -- register_imported skips HSA image create
