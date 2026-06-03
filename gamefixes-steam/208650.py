@@ -77,6 +77,13 @@ def main() -> None:
     # 2026-06-01 after being stripped by 1aa7ba3a's over-aggressive "clean up
     # investigation probes" pass.
     set_default_environment('ZLUDA_MS1_RD5_RESET', '1')
+    # 2026-06-03 A/B switch: ZLUDA_MS1_RD5_RESET_SYNC=1 reverts to the
+    # pre-8b53ca00 synchronous hipMemsetD32-in-launch_kernel behavior; =0
+    # (default) uses the host-thread drain queue. iter26 vs iter27 A/B in
+    # progress to determine if the drain-queue refactor caused the 839k→160k
+    # regression.
+    set_default_environment('ZLUDA_MS1_RD5_RESET_SYNC', '0')
+    set_default_environment('ZLUDA_INTERCEPT_SIMPLE_MEMSET', '0')
     # 2026-06-02 iter1: ZLUDA_MS4_POST_SYNC=1 → 580 launches, MS_4 GPU fault.
     # No clear improvement vs without it (639 / 283k). Disabled.
     # 2026-06-02 iter2: 8 probe env vars (TEXOBJ_SYNC=0 etc.) → 1028 launches but
