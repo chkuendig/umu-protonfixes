@@ -63,7 +63,9 @@ def main() -> None:
     # bar.sync fence, VGPR-zero prolog, dirty-flag null-stream sync, texobj sync,
     # HDP flush) are all lib-default-on and need nothing here.
     set_default_environment('ZLUDA_BROAD_MEMBAR', '1')
-    set_default_environment('ZLUDA_IOFX_ACTOR_MEMBAR', '1')
+    # NOTE 2026-06-03: ZLUDA_IOFX_ACTOR_MEMBAR dropped — patch_iofx_actor_range_membar
+    # deleted (redundant with patch_broad_membar_before_bar_sync which covers ALL
+    # kernels including IOFX_actorRangeKernel).
     set_default_environment('ZLUDA_LAUNCH_MUTEX', '2')
     # NULL-stream strict: closes a CUDA-spec gap (HIP's null-stream doesn't
     # serialise like CUDA's). Source default OFF; previous protonfix had it
