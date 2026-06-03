@@ -84,6 +84,16 @@ def main() -> None:
     # regression.
     set_default_environment('ZLUDA_MS1_RD5_RESET_SYNC', '0')
     set_default_environment('ZLUDA_INTERCEPT_SIMPLE_MEMSET', '0')
+    set_default_environment('ZLUDA_ACTORRANGE_DUMP', '0')
+    # 2026-06-03: cuEventSynchronize HDP flush. cuStreamSynchronize already does
+    # hipDeviceSynchronize via ZLUDA_HDP_FLUSH_ON_SYNC (default-ON); the
+    # symmetric event path did not. Ghidra-decoded Class B host crash at
+    # PhysX3_x64.dll RVA 0x20ced9 is a vtable-iteration first-deref UAF
+    # consistent with PhysX reading a snapshot that still holds stale
+    # pointers because GPU writes are stuck in the HDP write buffer.
+    # See project_class_b_physx_vtable_crash_decoded_2026_06_03.md. Default
+    # OFF — iter30 A/B will determine if it's a net positive.
+    set_default_environment('ZLUDA_EVENT_HDP_FLUSH', '0')
     # 2026-06-02 iter1: ZLUDA_MS4_POST_SYNC=1 → 580 launches, MS_4 GPU fault.
     # No clear improvement vs without it (639 / 283k). Disabled.
     # 2026-06-02 iter2: 8 probe env vars (TEXOBJ_SYNC=0 etc.) → 1028 launches but
