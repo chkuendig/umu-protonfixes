@@ -131,6 +131,13 @@ def main() -> None:
     #   '1' = hipDeviceSynchronize
     #   '2' = hipStreamSynchronize (this stream only)
     set_default_environment('ZLUDA_MS4_PRE_SYNC', '0')
+    # 2026-06-05 Class B residual: PhysX reads from host-mapped buffer that
+    # MemCopyBatchedAsync populates. If PhysX skips cuEventSync, HDP write-
+    # combine holds the writes. hipDeviceSync after MemCopyBatchedAsync
+    # triggers HDP flush MMIO. A/B candidate.
+    # 2026-06-05 SHIPPED default-ON: n=2 → mean 1.10M (~2.6× v5+Phase 2
+    # baseline 429k), Class B 1/2 but at much later launch counts.
+    set_default_environment('ZLUDA_MEMCPY_HDP_FLUSH', '1')
     # 2026-06-02 iter1: ZLUDA_MS4_POST_SYNC=1 → 580 launches, MS_4 GPU fault.
     # No clear improvement vs without it (639 / 283k). Disabled.
     # 2026-06-02 iter2: 8 probe env vars (TEXOBJ_SYNC=0 etc.) → 1028 launches but
