@@ -117,6 +117,11 @@ def main() -> None:
     # writes to mapped buffers are immediately host-visible. Default 0
     # (legacy coarse-grained behavior).
     set_default_environment('ZLUDA_HOST_COHERENT', '0')
+    # 2026-06-05 Class A experiment: hipDeviceSynchronize before every
+    # hipTexRefSetAddress/Array to match CUDA's per-launch binding
+    # snapshot semantics. PhysX changes texref bindings while in-flight
+    # IOFX kernels read them. Default OFF — A/B candidate.
+    set_default_environment('ZLUDA_TEXREF_SYNC', '0')
     # 2026-06-02 iter1: ZLUDA_MS4_POST_SYNC=1 → 580 launches, MS_4 GPU fault.
     # No clear improvement vs without it (639 / 283k). Disabled.
     # 2026-06-02 iter2: 8 probe env vars (TEXOBJ_SYNC=0 etc.) → 1028 launches but
