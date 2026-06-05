@@ -93,7 +93,30 @@ def main() -> None:
     # pointers because GPU writes are stuck in the HDP write buffer.
     # See project_class_b_physx_vtable_crash_decoded_2026_06_03.md. Default
     # OFF — iter30 A/B will determine if it's a net positive.
-    set_default_environment('ZLUDA_EVENT_HDP_FLUSH', '0')
+    # 2026-06-05 Phase 2 shipped (n=3 default-ON): mean 521k vs baseline 294k
+    # (+77%), 0/3 Class B hits vs 3/5 in baseline. Class B effectively
+    # eliminated; residual is Class A TCP wild-VA.
+    set_default_environment('ZLUDA_EVENT_HDP_FLUSH', '1')
+    # cuStreamQuery(NULL) startup mask controls. Default behavior is the refined
+    # "NotReady before first real launch, real after" mode in stream.rs; these
+    # toggles expose the existing A/B overrides through deploy_batman's .env.
+    set_default_environment('ZLUDA_STREAM_QUERY_REAL', '0')
+    set_default_environment('ZLUDA_STREAM_QUERY_LEGACY', '0')
+    # 2026-06-04 Class B null-deref investigation: per-call timeline of
+    # cu{Stream,Event,Ctx}Synchronize calls written to
+    # /tmp/zluda_sync_timeline.log when set to 1. Off by default.
+    set_default_environment('ZLUDA_SYNC_TIMELINE', '0')
+    # 2026-06-04 Class B coredump enrichment: set /proc/self/coredump_filter
+    # to 0xff so the next coredump captures file-backed mappings (Wine PE
+    # heap). Default 0x33 excludes them and `gdb` returns "Cannot access
+    # memory" at the failing iterator's array pointer. Off by default.
+    set_default_environment('ZLUDA_FULL_COREDUMP', '0')
+    # 2026-06-05 Phase 1 Class B host-coherent A/B: when 1, every
+    # hipHostMalloc is OR'd with hipHostMallocCoherent (0x40000000),
+    # forcing fine-grained pool. Bypasses HDP write-combining so GPU
+    # writes to mapped buffers are immediately host-visible. Default 0
+    # (legacy coarse-grained behavior).
+    set_default_environment('ZLUDA_HOST_COHERENT', '0')
     # 2026-06-02 iter1: ZLUDA_MS4_POST_SYNC=1 → 580 launches, MS_4 GPU fault.
     # No clear improvement vs without it (639 / 283k). Disabled.
     # 2026-06-02 iter2: 8 probe env vars (TEXOBJ_SYNC=0 etc.) → 1028 launches but
