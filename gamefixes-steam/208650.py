@@ -122,6 +122,15 @@ def main() -> None:
     # snapshot semantics. PhysX changes texref bindings while in-flight
     # IOFX kernels read them. Default OFF — A/B candidate.
     set_default_environment('ZLUDA_TEXREF_SYNC', '0')
+    # 2026-06-05 Class A experiment: drain in-flight kernels BEFORE MS_4
+    # launches. MS_4 has atom.global.add[ptr], -1 — if counter is 0 when
+    # MS_4 reads, the atomic wraps to 0xFFFFFFFF → out-of-bounds store.
+    # The counter is written by MS_2_Batched (BB11_9). Force the producer
+    # to drain via:
+    #   '0' = off (default)
+    #   '1' = hipDeviceSynchronize
+    #   '2' = hipStreamSynchronize (this stream only)
+    set_default_environment('ZLUDA_MS4_PRE_SYNC', '0')
     # 2026-06-02 iter1: ZLUDA_MS4_POST_SYNC=1 → 580 launches, MS_4 GPU fault.
     # No clear improvement vs without it (639 / 283k). Disabled.
     # 2026-06-02 iter2: 8 probe env vars (TEXOBJ_SYNC=0 etc.) → 1028 launches but
