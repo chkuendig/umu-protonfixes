@@ -143,6 +143,13 @@ def main() -> None:
     # When query returns SUCCESS, PhysX reads mapped-host but HDP can hold
     # writes. Hook hipDeviceSync on SUCCESS to flush HDP.
     set_default_environment('ZLUDA_QUERY_HDP_FLUSH', '1')
+    # 2026-06-06 Class B residual fix at AQL packet level: OR-in
+    # hipEventReleaseToSystem (0x80000000) on every cuEventCreate. Every
+    # cuEventRecord then triggers a system-scope release fence which on
+    # RDNA includes HDP MMIO flush — drains HDP buffer at every event
+    # record (43k/run). Replaces per-API hipDeviceSync hooks with a
+    # single semantic change. Default ON; set =0 to opt out.
+    set_default_environment('ZLUDA_EVENT_RELEASE_SYSTEM', '1')
     # 2026-06-02 iter1: ZLUDA_MS4_POST_SYNC=1 → 580 launches, MS_4 GPU fault.
     # No clear improvement vs without it (639 / 283k). Disabled.
     # 2026-06-02 iter2: 8 probe env vars (TEXOBJ_SYNC=0 etc.) → 1028 launches but
