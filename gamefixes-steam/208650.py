@@ -150,6 +150,15 @@ def main() -> None:
     # record (43k/run). Replaces per-API hipDeviceSync hooks with a
     # single semantic change. Default ON; set =0 to opt out.
     set_default_environment('ZLUDA_EVENT_RELEASE_SYSTEM', '1')
+    # 2026-06-06 Class A upstream-writer hunt — diagnostic only.
+    # ZLUDA_MEMCPY_SRC_TRACE=1 widens the MemCopyBatchedAsync descriptor
+    # log to include descriptors whose dst lands near the relay struct
+    # (off ~1 MiB). ZLUDA_MEMCPY_SRC_WRITER=1 then logs every kernel
+    # whose arg pointer falls within the src allocation tracked from
+    # those descriptors — identifying which compute kernel writes the
+    # over-counted shape count. Both default OFF (diagnostic).
+    set_default_environment('ZLUDA_MEMCPY_SRC_TRACE', '0')
+    set_default_environment('ZLUDA_MEMCPY_SRC_WRITER', '0')
     # 2026-06-02 iter1: ZLUDA_MS4_POST_SYNC=1 → 580 launches, MS_4 GPU fault.
     # No clear improvement vs without it (639 / 283k). Disabled.
     # 2026-06-02 iter2: 8 probe env vars (TEXOBJ_SYNC=0 etc.) → 1028 launches but
