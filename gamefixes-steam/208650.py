@@ -85,6 +85,8 @@ def main() -> None:
     set_default_environment('ZLUDA_MS1_RD5_RESET_SYNC', '0')
     set_default_environment('ZLUDA_INTERCEPT_SIMPLE_MEMSET', '0')
     set_default_environment('ZLUDA_ACTORRANGE_DUMP', '0')
+    set_default_environment('ZLUDA_AR_PTR_TRACE', '0')
+    set_default_environment('ZLUDA_IOFX_CAPTURE_SAMPLE', '64')
     # 2026-06-03: cuEventSynchronize HDP flush. cuStreamSynchronize already does
     # hipDeviceSynchronize via ZLUDA_HDP_FLUSH_ON_SYNC (default-ON); the
     # symmetric event path did not. Ghidra-decoded Class B host crash at
