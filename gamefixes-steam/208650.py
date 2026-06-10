@@ -87,6 +87,14 @@ def main() -> None:
     set_default_environment('ZLUDA_ACTORRANGE_DUMP', '0')
     set_default_environment('ZLUDA_AR_PTR_TRACE', '0')
     set_default_environment('ZLUDA_IOFX_CAPTURE_SAMPLE', '64')
+    # 2026-06-10 A1 writer hunt: per-kernel D2D snapshot of the latched
+    # MS_4 counter buffer ([COUNTER CHANGED] timeline). Was deploy-
+    # whitelisted only — two-whitelist rule. Default OFF (heavy: D2D+sync
+    # per launch).
+    set_default_environment('ZLUDA_COUNTER_SNAPSHOT', '0')
+    # 2026-06-10 IOFX writer hunt: in-game NRSS final-pass output sortedness
+    # check (NRSS_VALIDATE log lines). Default OFF (D2H per final pass).
+    set_default_environment('ZLUDA_NRSS_VALIDATE', '0')
     # 2026-06-03: cuEventSynchronize HDP flush. cuStreamSynchronize already does
     # hipDeviceSynchronize via ZLUDA_HDP_FLUSH_ON_SYNC (default-ON); the
     # symmetric event path did not. Ghidra-decoded Class B host crash at
