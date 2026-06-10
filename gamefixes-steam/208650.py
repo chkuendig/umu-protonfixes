@@ -120,8 +120,77 @@ def main() -> None:
     # 2026-06-05 Class A experiment: hipDeviceSynchronize before every
     # hipTexRefSetAddress/Array to match CUDA's per-launch binding
     # snapshot semantics. PhysX changes texref bindings while in-flight
-    # IOFX kernels read them. Default OFF — A/B candidate.
-    set_default_environment('ZLUDA_TEXREF_SYNC', '0')
+    # IOFX kernels read them.
+    # 2026-06-07 SHIPPED default-ON: n=3 with ZLUDA_LOG=1 confirmed
+    # IOFX_actorRangeKernel was the kernel responsible for the
+    # single-store wild-VA Class A signature (TCP+RW=1+PERM=0x5, last
+    # kernel before SIGABRT in 17:21 bench). With TEXREF_SYNC=1 the
+    # TCP wild-write disappears in 2 of 3 runs; only display-side CB/DB
+    # faults remain. Run distribution: 2411 / 110,374 / 346,963 launches
+    # (mean 153k vs baseline ~6k). Best run 17.86 min runtime, 347k
+    # launches — vastly exceeds 14.1-min baseline. Class B (eliminated
+    # by EVENT_RELEASE_SYSTEM) did not re-emerge. The 2026-06-05 n=2
+    # rejection was masked by then-unfixed Class B; with that fixed, the
+    # texref sync no longer regresses.
+    set_default_environment('ZLUDA_TEXREF_SYNC', '1')
+    # 2026-06-09 Class A bf000 candidate fix. Post-sync after cuTexRefSet*
+    # (in addition to pre-sync). Hypothesis: AMDGPU TCP/SRD cache carries
+    # read-only texref flavor for pages of a bound buffer; subsequent
+    # direct st.global writes to byte 0 of that buffer fault with
+    # PERMISSION_FAULTS=0x5. Default OFF (A/B candidate). See
+    # project_bf000_buffer_is_flex_position_2026_06_09.md.
+    set_default_environment('ZLUDA_TEXREF_POST_SYNC', '0')
+    # 2026-06-09 Class A counter-coherency investigation. Log every
+    # cuMemcpyHtoD* / cuMemsetD* with size <= 256 bytes (= likely
+    # per-frame counter / control-struct writes). Hypothesis under
+    # test: the per-actor counter that MS_4's atom.global.add reads
+    # is written by host but the write doesn't get HDP-flushed, so
+    # GPU's first atom.add of a new frame reads a stale value →
+    # underflow → wild scatter. Default OFF (diagnostic). See plan
+    # ~/.claude/plans/counter-coherency-bf000-2026-06-09.md.
+    set_default_environment('ZLUDA_COUNTER_TRACE', '0')
+    # 2026-06-09 Class A counter-coherency fix candidate. Force a
+    # hipDeviceSynchronize after every small cuMemsetD32Async (n<=64).
+    # n9 trace caught 3 different streams clearing the same counter
+    # alloc → cross-stream race possible. Default OFF; flip to 1 to A/B.
+    set_default_environment('ZLUDA_COUNTER_CLEAR_SYNC', '0')
+    # 2026-06-09 MS_4 PTX underflow guard — the surgical fix for the Class A
+    # wild-VA scatter bug at its root. Inserts `setp.lt.s32 r10, 0; @ bra
+    # ret;` before MS_4's `mul.wide.u32 r10*4` to skip the wild store when
+    # the counter has underflowed. The bug also fires on NVIDIA driver
+    # >=461.09 (Steam Community Guide 2433732129 advises downgrade to
+    # 456.55). Default ON; set to 0 to disable. See
+    # project_class_a_is_genuine_physx_bug_2026_06_09.md.
+    set_default_environment('ZLUDA_MS4_UNDERFLOW_GUARD', '1')
+    # 2026-06-10 MS_4 guard reinvestigation: pre-launch capture ring +
+    # counter-vs-real-count audit (MS4_SAFE / MS4_COUNTER_UNDERFLOW log
+    # lines from summarize_ms4_capture). Was whitelisted in
+    # deploy_batman.sh but missing here — two-whitelist rule.
+    # Default OFF (diagnostic, 2 D2D + sync per MS_4 launch).
+    set_default_environment('ZLUDA_MS4_CAPTURE', '0')
+    # 2026-06-10 Class A FleX investigation: per-pass FleX sort output
+    # validation (readback after every NULL-stream RadixSortDownsweep,
+    # logs PASS_CORRUPT with spine_max/spine_sum on bit31 corruption).
+    # May-2026 infra; needed here because .env overrides only apply to
+    # vars with a set_default_environment call (two-whitelist rule).
+    # Default OFF (diagnostic).
+    set_default_environment('ZLUDA_VALIDATE_SORT', '0')
+    # 2026-06-10 prefix-scan root cause: cross-engine (SDMA<->compute)
+    # ordering is unreliable on Van Gogh + ROCm 6.2.4 + gfx1033 override.
+    # Lab A/B (cub_sort_multiblock_*_amdgpu): default SDMA = 3/3 hangs
+    # (lost completion signal, GPU idle, runtime spinning); SDMA=0 =
+    # 1500/1500 game-shaped sort iterations clean in 7s. The in-game
+    # manifestation is the May-11 spine "doubling ladder" (first corrupt
+    # entry = exactly 2n): the spine MEMSET (SDMA) doesn't land before
+    # Upsweep (compute) adds counts -> cross-frame accumulation -> wild
+    # Downsweep scatter -> Class A GPU fault. '1' = stock behavior;
+    # bench A/B passes 0 via .env. Flip default to '0' after in-game
+    # validation.
+    set_default_environment('HSA_ENABLE_SDMA', '1')
+    # 2026-06-10 NRSS lab-driver capture: log all 13 typed args + dims for
+    # the first 600 IOFX_newRadixSortStepKernel launches. Feeds the
+    # isolated game-shape reproducer. Default OFF (diagnostic).
+    set_default_environment('ZLUDA_NRSS_ARG_TRACE', '0')
     # 2026-06-05 Class A experiment: drain in-flight kernels BEFORE MS_4
     # launches. MS_4 has atom.global.add[ptr], -1 — if counter is 0 when
     # MS_4 reads, the atomic wraps to 0xFFFFFFFF → out-of-bounds store.
@@ -131,6 +200,21 @@ def main() -> None:
     #   '1' = hipDeviceSynchronize
     #   '2' = hipStreamSynchronize (this stream only)
     set_default_environment('ZLUDA_MS4_PRE_SYNC', '0')
+    # 2026-06-08 Class B at depth: MS_3 has `atom.global.add count` then
+    # 4 st.global.u16 slot stores. On AMD HDP write-combine can deliver
+    # count update before slot stores → PhysX polling sees count=N+1
+    # with slot[N]=NULL → Class B vtable NULL deref at
+    # PhysX3_x64.dll+0x20ced9. ZLUDA_MS3_POST_SYNC triggers a sync
+    # POST-launch of MS_3 to force HDP flush before PhysX polls.
+    #   '0' = off
+    #   '1' = hipDeviceSynchronize (cross-stream drain + HDP flush)
+    #   '2' = hipStreamSynchronize (this stream only)
+    # 2026-06-08 SHIPPED default '1': n=2 with TEXREF_SYNC=1 +
+    # MS3_POST_SYNC=1: 312,495 launches / 15.13 min and 336,833 / 17.11
+    # min — both SIGABRT (Class A GPU fault), 0 of 2 SIGSEGV (Class B
+    # host crash). vs prior n=1 at same depth (run 4 17.84 min)
+    # which hit Class B. Cost = one hipDeviceSync per MS_3 launch.
+    set_default_environment('ZLUDA_MS3_POST_SYNC', '1')
     # 2026-06-05 Class B residual: PhysX reads from host-mapped buffer that
     # MemCopyBatchedAsync populates. If PhysX skips cuEventSync, HDP write-
     # combine holds the writes. hipDeviceSync after MemCopyBatchedAsync
@@ -159,6 +243,15 @@ def main() -> None:
     # over-counted shape count. Both default OFF (diagnostic).
     set_default_environment('ZLUDA_MEMCPY_SRC_TRACE', '0')
     set_default_environment('ZLUDA_MEMCPY_SRC_WRITER', '0')
+    # 2026-06-09 Class A bf000 investigation: ZLUDA_FREE_AFTER_LAUNCH_SCAN
+    # enables narrow per-kernel ptr-range capture for IOFX_actorRangeKernel,
+    # IOFX_newRadixSortStepKernel, TurbulenceFS_dynamicGridMG*, makeSortKeys,
+    # remap, and newRadixSortBlock. On SIGABRT/SIGSEGV the signal handler
+    # dumps these into /tmp/zluda_tex.log so we can identify whether the
+    # bf000 buffer (= start of a 1.04 MiB particle buffer) is one of the
+    # proximate kernel's args. Default OFF (diagnostic; small per-launch
+    # cost but the data is invaluable when crash fires).
+    set_default_environment('ZLUDA_FREE_AFTER_LAUNCH_SCAN', '0')
     # 2026-06-02 iter1: ZLUDA_MS4_POST_SYNC=1 → 580 launches, MS_4 GPU fault.
     # No clear improvement vs without it (639 / 283k). Disabled.
     # 2026-06-02 iter2: 8 probe env vars (TEXOBJ_SYNC=0 etc.) → 1028 launches but
