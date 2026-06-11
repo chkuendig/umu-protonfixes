@@ -95,6 +95,9 @@ def main() -> None:
     # 2026-06-10 IOFX writer hunt: in-game NRSS final-pass output sortedness
     # check (NRSS_VALIDATE log lines). Default OFF (D2H per final pass).
     set_default_environment('ZLUDA_NRSS_VALIDATE', '0')
+    # 2026-06-11 scoped scatter-offset producer-store volatility (root-cause
+    # fix for the NRSS phase-3 LDS race). Default OFF pending A/B.
+    set_default_environment('ZLUDA_LDS_PRODUCER_VOLATILE', '0')
     # 2026-06-03: cuEventSynchronize HDP flush. cuStreamSynchronize already does
     # hipDeviceSynchronize via ZLUDA_HDP_FLUSH_ON_SYNC (default-ON); the
     # symmetric event path did not. Ghidra-decoded Class B host crash at
