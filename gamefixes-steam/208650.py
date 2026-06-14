@@ -197,9 +197,12 @@ def main() -> None:
     # entry = exactly 2n): the spine MEMSET (SDMA) doesn't land before
     # Upsweep (compute) adds counts -> cross-frame accumulation -> wild
     # Downsweep scatter -> Class A GPU fault. '1' = stock behavior;
-    # bench A/B passes 0 via .env. Flip default to '0' after in-game
-    # validation.
-    set_default_environment('HSA_ENABLE_SDMA', '1')
+    # bench A/B passes 0 via .env.
+    # 2026-06-12: flipped default to '0' — in-game validated across multiple
+    # SDMA=0 benches reaching 35k+ launches with NRSS 61/61 sorts clean (0
+    # spine-doubling Class A faults). The residual perf-test wild-VA is a
+    # separate StepKernel grid=4 scatter bug, unrelated to SDMA.
+    set_default_environment('HSA_ENABLE_SDMA', '0')
     # 2026-06-10 NRSS lab-driver capture: log all 13 typed args + dims for
     # the first 600 IOFX_newRadixSortStepKernel launches. Feeds the
     # isolated game-shape reproducer. Default OFF (diagnostic).
@@ -290,3 +293,13 @@ def main() -> None:
     # enabled, but follow-up runs reverted to ~70 kernels — variance, not a
     # real workaround. Crash is in PhysX CUB ParticleIOS_compactKernel regardless
     # of D3D11 config. End users can still .env-override to A/B locally.
+
+    # Generic .env passthrough: apply ANY override key from 208650.env that the
+    # explicit set_default_environment() calls above did not already handle.
+    # Without this, investigation-only knobs (ZLUDA_D3D11_COPY_PATH,
+    # ZLUDA_D3D11_HSA_ISOLATE, ZLUDA_D3D11_SUBRESOURCE, ...) were read into
+    # FILE_OVERRIDES but never injected into the game env — they only took effect
+    # if named in an explicit call here. deploy_batman.sh's whitelist controls
+    # which shell vars reach the .env; this loop ensures every one of them lands.
+    for _key, _value in FILE_OVERRIDES.items():
+        util.set_environment(_key, _value)
