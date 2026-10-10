@@ -4,4 +4,4 @@ from protonfixes import util
 
 
 def main() -> None:
-    util.disable_protonmediaconverter()
+    util.append_argument('-vomstyle=layer')

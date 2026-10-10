@@ -4,22 +4,15 @@ import os
 import re
 import sys
 import csv
+
 from functools import lru_cache
 from importlib import import_module
+from typing import Optional
 
-try:
-    from . import config
-    from .checks import run_checks
-    from .logger import log
-except ImportError:
-    import config
-    from checks import run_checks
-    from logger import log
-
-try:
-    import __main__ as protonmain
-except ImportError:
-    log.warn('Unable to hook into Proton main script environment')
+from .util import ProtonVersion
+from .config import config
+from .checks import run_checks
+from .logger import log
 
 
 @lru_cache
@@ -35,45 +28,38 @@ def get_game_id() -> str:
         return re.findall(r'\d+', os.environ['STEAM_COMPAT_DATA_PATH'])[-1]
 
     log.crit('Game ID not found in environment variables')
-    return None
+    exit()
+
+
+def get_game_title(database: str) -> str:
+    """Get the game name from the local umu database"""
+    umu_id = os.environ['UMU_ID']
+    store = os.environ.get('STORE') or 'none'
+    title = 'UNKNOWN'
+
+    try:
+        with open(database, newline='', encoding='utf-8') as csvfile:
+            csvreader = csv.reader(csvfile)
+            for row in csvreader:
+                # Check if the row has enough columns and matches both UMU_ID and STORE
+                if len(row) > 3 and row[3] == umu_id and row[1] == store:
+                    return row[0]
+    except FileNotFoundError:
+        log.warn(f'CSV file not found: {database}')
+    except Exception as ex:
+        log.debug(f'Error reading CSV file: {ex}')
+
+    log.warn('Game title not found in CSV')
+
+    return title
 
 
 @lru_cache
 def get_game_name() -> str:
-    """Trys to return the game name from environment variables"""
-    pfx = os.environ.get('WINEPREFIX') or protonmain.g_session.env.get('WINEPREFIX')
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-
+    """Tries to return the game name from environment variables"""
     if os.environ.get('UMU_ID'):
-        if os.path.isfile(f'{pfx}/game_title'):
-            with open(f'{pfx}/game_title', encoding='utf-8') as file:
-                return file.readline()
-
-        umu_id = os.environ['UMU_ID']
-        store = os.getenv('STORE', 'none')
-        csv_file_path = os.path.join(script_dir, 'umu-database.csv')
-
-        try:
-            with open(csv_file_path, newline='', encoding='utf-8') as csvfile:
-                csvreader = csv.reader(csvfile)
-                for row in csvreader:
-                    # Check if the row has enough columns and matches both UMU_ID and STORE
-                    if len(row) > 3 and row[3] == umu_id and row[1] == store:
-                        title = row[0]  # Title is the first entry
-                        with open(
-                            os.path.join(pfx, 'game_title'),
-                            'w',
-                            encoding='utf-8',
-                        ) as file:
-                            file.write(title)
-                        return title
-        except FileNotFoundError:
-            log.warn(f'CSV file not found: {csv_file_path}')
-        except Exception as ex:
-            log.debug(f'Error reading CSV file: {ex}')
-
-        log.warn('Game title not found in CSV')
-        return 'UNKNOWN'
+        database = f'{os.path.dirname(os.path.abspath(__file__))}/umu-database.csv'
+        return get_game_title(database)
 
     try:
         log.debug('UMU_ID is not in environment')
@@ -91,7 +77,7 @@ def get_game_name() -> str:
     return 'UNKNOWN'
 
 
-def get_store_name(store: str) -> str:
+def get_store_name(store: str) -> Optional[str]:
     """Mapping for store identifier to store name"""
     return {
         'amazon': 'Amazon',
@@ -113,7 +99,7 @@ def get_module_name(game_id: str, default: bool = False, local: bool = False) ->
     if game_id.isnumeric():
         store = 'steam'
     elif os.environ.get('STORE'):
-        store = os.environ.get('STORE').lower()
+        store = os.environ.get('STORE', '').lower()
 
     if store != 'steam':
         log.info(f'Non-steam game {get_game_name()} ({game_id})')
@@ -130,7 +116,7 @@ def get_module_name(game_id: str, default: bool = False, local: bool = False) ->
     )
 
 
-def _run_fix_local(game_id: str, default: bool = False) -> bool:
+def _run_fix_local(game_id: str, stage: str, default: bool = False) -> bool:
     """Check if a local gamefix is available first and run it"""
     localpath = os.path.expanduser('~/.config/protonfixes/localfixes')
     module_name = game_id if not default else 'default'
@@ -144,10 +130,12 @@ def _run_fix_local(game_id: str, default: bool = False) -> bool:
         sys.path.append(os.path.expanduser('~/.config/protonfixes'))
 
     # Run fix
-    return _run_fix(game_id, default, True)
+    return _run_fix(game_id, stage, default, True)
 
 
-def _run_fix(game_id: str, default: bool = False, local: bool = False) -> bool:
+def _run_fix(
+    game_id: str, stage: str, default: bool = False, local: bool = False
+) -> bool:
     """Private function, which actually executes gamefixes"""
     fix_type = 'protonfix' if not default else 'defaults'
     scope = 'global' if not local else 'local'
@@ -156,18 +144,29 @@ def _run_fix(game_id: str, default: bool = False, local: bool = False) -> bool:
         module_name = get_module_name(game_id, default, local)
         game_module = import_module(module_name)
 
-        log.info(f'Using {scope} {fix_type} for {get_game_name()} ({game_id})')
-        if hasattr(game_module, 'main_with_id'):
-            game_module.main_with_id(game_id)
-        else:
-            game_module.main()
+        log.info(
+            f'Using {stage} stage {scope} {fix_type} for {get_game_name()} ({game_id})'
+        )
+        if stage == 'early':
+            if hasattr(game_module, 'early_with_id'):
+                game_module.early_with_id(game_id)
+            elif hasattr(game_module, 'early'):
+                game_module.early()
+
+        elif stage == 'main':
+            if hasattr(game_module, 'main_with_id'):
+                game_module.main_with_id(game_id)
+            else:
+                game_module.main()
     except ImportError:
-        log.info(f'No {scope} {fix_type} found for {get_game_name()} ({game_id})')
+        log.info(
+            f'No {stage} stage {scope} {fix_type} found for {get_game_name()} ({game_id})'
+        )
         return False
     return True
 
 
-def run_fix(game_id: str) -> None:
+def run_fix(game_id: str, *, stage: str) -> None:
     """Loads a gamefix module by it's gameid
 
     local fixes prevent global fixes from being executed
@@ -175,20 +174,20 @@ def run_fix(game_id: str) -> None:
     if game_id is None:
         return
 
-    if config.enable_checks:
+    if config.main.enable_checks:
         run_checks()
 
     # execute default.py (local)
-    if not _run_fix_local(game_id, True) and config.enable_global_fixes:
-        _run_fix(game_id, True)  # global
+    if not _run_fix_local(game_id, stage, True) and config.main.enable_global_fixes:
+        _run_fix(game_id, stage, True)  # global
 
     # execute <game_id>.py (local)
-    if not _run_fix_local(game_id, False) and config.enable_global_fixes:
-        _run_fix(game_id, False)  # global
+    if not _run_fix_local(game_id, stage, False) and config.main.enable_global_fixes:
+        _run_fix(game_id, stage, False)  # global
 
 
-def main() -> None:
-    """Runs the gamefix"""
+def _entry_check() -> bool:
+    """Checks if the gamefix should run"""
     check_args = [
         'iscriptevaluator.exe' in sys.argv[2],
         'getcompatpath' in sys.argv[1],
@@ -198,7 +197,24 @@ def main() -> None:
     if any(check_args):
         log.debug(str(sys.argv))
         log.debug('Not running protonfixes for setup runs')
-        return
+        return False
 
-    log.info('Running protonfixes')
-    run_fix(get_game_id())
+    version = ProtonVersion.from_version_file()
+    log.info(
+        f'Running protonfixes on "{version.version_name}", build at {version.build_date}.'
+    )
+    return True
+
+
+def early() -> None:
+    """Runs the early part of a gamefix"""
+    if not _entry_check():
+        return
+    run_fix(get_game_id(), stage='early')
+
+
+def main() -> None:
+    """Runs the main part of a gamefix"""
+    if not _entry_check():
+        return
+    run_fix(get_game_id(), stage='main')
