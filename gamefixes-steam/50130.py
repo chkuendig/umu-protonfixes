@@ -1,53 +1,24 @@
-"""Experimental Mafia II Classic setup for the separate WoW64 tool."""
-from pathlib import Path
+"""Game fix for Mafia II (Classic): GPU PhysX through ZLUDA"""
+
 import os
+
 from protonfixes import util
 
 
-def cpu_control():
-    return os.environ.get('ZLUDA_WOW64_CPU_CONTROL') == '1'
-
-
-def early():
-    # GE11 derives WINEARCH before the normal game hook runs.
+def early() -> None:
+    # 32-bit: CUDA reaches ZLUDA through nvcuda's WoW64 bridge, which needs
+    # Wine's new WoW64 mode. Proton reads this before the prefix is set up.
     util.set_environment('PROTON_USE_WOW64', '1')
-    if cpu_control():
-        # The fork's ZLUDA launcher tests presence, not the value "0".
-        util.del_environment('PROTON_ENABLE_ZLUDA')
-        util.del_environment('PROTON_FORCE_NVAPI')
-    else:
-        util.set_environment('PROTON_ENABLE_ZLUDA', '1')
-        util.set_environment('PROTON_FORCE_NVAPI', '1')
-    util.set_environment('DXVK_NVAPI_ALLOW_OTHER_DRIVERS', '1')
-    util.set_environment('DXVK_ENABLE_NVAPI', '0' if cpu_control() else '1')
+    # Wine sets WINESTEAMNOEXEC=1 for this game (CEG). Its steamclient fault
+    # redirect then returns without restoring the 32-bit FS selector, which
+    # crashes under new WoW64. Wine only sets it when unset, so this wins.
+    if 'WINESTEAMNOEXEC' not in os.environ:
+        util.set_environment('WINESTEAMNOEXEC', '0')
 
 
-def main():
-    tool = Path(__file__).resolve().parents[2]
-    util.set_environment('ZLUDA_WOW64_LIBRARY', str(tool / 'files/lib64/libcuda.so'))
-    util.set_environment('WINEDLLOVERRIDES', 'nvcuda=b;nvapi,dxgi,d3d9,d3d11=n,b;PhysXLoader=n,b')
-    env_file = Path(__file__).with_suffix('.env')  # absent in a normal install
-    preserve = os.environ.get('ZLUDA_WOW64_ENV_PRESERVE') == '1'
-    for raw in env_file.read_text().splitlines() if env_file.exists() else ():
-        line = raw.strip()
-        if not line or line.startswith('#'):
-            continue
-        key, value = line.split('=', 1)
-        # Diagnostic runs may pre-set a switch; keep it when asked.
-        if preserve and key in os.environ:
-            continue
-        util.set_environment(key, value)
-    if cpu_control():
-        # Loading diagnostic: same WoW64 setup with CUDA and NVAPI unavailable,
-        # so PhysX falls back to the CPU.
-        for key in ('PROTON_ENABLE_ZLUDA', 'PROTON_FORCE_NVAPI'):
-            util.del_environment(key)
-        for key in ('PROTON_ENABLE_NVAPI', 'DXVK_ENABLE_NVAPI'):
-            util.set_environment(key, '0')
-        util.set_environment('WINEDLLOVERRIDES',
-                             'nvcuda=;nvapi,nvapi64=;dxgi,d3d9,d3d11=n,b;PhysXLoader=n,b')
-    # The shipped executable imports d3dx9_42; use the complete D3DX9 verb.
-    # Keep PhysX version management in the existing per-game helper.
-    for verb in ('d3dx9', 'physx'):
-        if not util.checkinstalled(verb) and not util.protontricks(verb):
-            raise RuntimeError(f'{verb} installation failed; inspect Protonfixes log')
+def main() -> None:
+    util.set_environment('PROTON_ENABLE_ZLUDA', '1')
+    # The executable imports d3dx9_42. Steam's installscript installs the
+    # game's own PhysX System Software (3rd/PhysX_9.10.0513).
+    if not util.checkinstalled('d3dx9') and not util.protontricks('d3dx9'):
+        raise RuntimeError('d3dx9 installation failed; inspect Protonfixes log')

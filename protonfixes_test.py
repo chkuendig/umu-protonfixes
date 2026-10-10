@@ -1,16 +1,11 @@
-import importlib.util
 import os
-import shutil
-import sys
 import tempfile
-import types
 import unittest
 
 from pathlib import Path
 from unittest.mock import patch, mock_open
 
 from . import fix
-from . import util as protonfix_util
 
 
 class TestProtonfixes(unittest.TestCase):
@@ -410,67 +405,6 @@ class TestProtonfixes(unittest.TestCase):
         os.environ['STORE'] = 'gog'
         result = fix.get_game_title(self.db.as_posix())
         self.assertEqual(result, 'UNKNOWN')
-
-
-class TestBatmanInvestigationFix(unittest.TestCase):
-    def _load_fix(self, path=None):
-        if path is None:
-            path = Path(__file__).with_name('gamefixes-steam').joinpath('208650.py')
-        spec = importlib.util.spec_from_file_location('batman_208650', path)
-        self.assertIsNotNone(spec)
-        self.assertIsNotNone(spec.loader)
-        module = importlib.util.module_from_spec(spec)
-        pkg = types.ModuleType('protonfixes')
-        pkg.util = protonfix_util
-        with patch.dict(
-            sys.modules,
-            {'protonfixes': pkg, 'protonfixes.util': protonfix_util},
-            clear=False,
-        ):
-            spec.loader.exec_module(module)
-        return module
-
-    def test_shell_override_wins_for_log_env(self):
-        module = self._load_fix()
-        module.FILE_OVERRIDES = {}
-        applied = {}
-
-        def record_env(key, value):
-            applied[key] = value
-
-        with patch.dict(
-            os.environ,
-            {'ZLUDA_LOG': '1', 'ZLUDA_DUMP_PTX': '1'},
-            clear=False,
-        ):
-            with patch.object(module.util, 'set_environment', side_effect=record_env):
-                with patch.object(module.util, 'winedll_override'):
-                    module.main()
-
-        # PROTON_ENABLE_ZLUDA is always set; shell overrides for debug-gates win.
-        self.assertEqual(applied['PROTON_ENABLE_ZLUDA'], '1')
-        self.assertEqual(applied['ZLUDA_LOG'], '1')
-        self.assertEqual(applied['ZLUDA_DUMP_PTX'], '1')
-
-    def test_file_override_wins_over_shell(self):
-        source = Path(__file__).with_name('gamefixes-steam').joinpath('208650.py')
-        with tempfile.TemporaryDirectory() as tmpdir:
-            copied = Path(tmpdir).joinpath('208650.py')
-            shutil.copy2(source, copied)
-            copied.with_suffix('.env').write_text('ZLUDA_LOG=1\n')
-            module = self._load_fix(copied)
-            applied = {}
-
-            def record_env(key, value):
-                applied[key] = value
-
-            # Shell says ZLUDA_LOG=0; .env file says =1 — file should win.
-            with patch.dict(os.environ, {'ZLUDA_LOG': '0'}, clear=False):
-                with patch.object(module.util, 'set_environment', side_effect=record_env):
-                    with patch.object(module.util, 'winedll_override'):
-                        module.main()
-
-        self.assertEqual(applied['ZLUDA_LOG'], '1')
 
 if __name__ == '__main__':
     unittest.main()

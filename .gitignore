@@ -93,7 +93,6 @@ celerybeat-schedule
 
 # Environments
 .env
-gamefixes-steam/*.env
 .venv
 env/
 venv/
