@@ -10,6 +10,6 @@ def main() -> None:
     # GPU PhysX through ZLUDA: Proton's ZLUDA block routes nvcuda to ZLUDA
     # and makes NVAPI report a CUDA-capable GPU, so PhysX picks its GPU path.
     util.set_environment('PROTON_ENABLE_ZLUDA', '1')
-    # Use the validated D3D11 texture-copy path for GPU PhysX output.
-    util.set_environment('ZLUDA_D3D11_CPU_COPY', '1')
-    util.set_environment('ZLUDA_D3D11_CPU_COPY_ENABLE_MT', '1')
+    # No D3D11 interop setting: nvcuda's cuGraphicsD3D11RegisterResource
+    # semi-stub fails and APEX falls back to its writeBuffer() path, which
+    # renders smoke and paper debris (SveSop/nvcuda 8ef0505, Wine bug 51523).
